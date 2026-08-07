@@ -15,6 +15,9 @@ authors = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
@@ -35,6 +38,13 @@ dependencies = [
     "pydantic-settings >= 2.0",
 ]
 dynamic = ["version"]
+
+
+[project.urls]
+Homepage = "https://github.com/freedomgod/schedflow"
+Documentation = "https://schedflow.readthedocs.io/"
+Repository = "https://github.com/freedomgod/schedflow"
+Issues = "https://github.com/freedomgod/schedflow/issues"
 
 
 [project.optional-dependencies]
