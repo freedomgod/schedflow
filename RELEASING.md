@@ -18,7 +18,7 @@ CI 中无需保存任何 API Token。
 ## 发布新版本
 
 1. 更新 `CHANGELOG.md`，合并到 `main`；
-2. 打标签并推送：
+2. 在 main 分支上打标签并推送（工作流会校验标签必须指向 main 的提交，dev 上的标签不会发布）：
 
 ```bash
 git tag v0.1.0
