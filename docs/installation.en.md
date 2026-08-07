@@ -69,7 +69,7 @@ This installs FastAPI, Uvicorn and the authentication dependencies (passlib, PyJ
 ### Install everything
 
 ```bash
-pip install schedflow[web,sqlalchemy,mongodb,redis]
+pip install schedflow[all]  # installs every optional extra
 ```
 
 !!! tip "Faster installs with uv"

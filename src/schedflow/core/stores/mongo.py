@@ -17,8 +17,11 @@ from schedflow.core.log import ExecutionLog
 try:
     from pymongo import MongoClient
     from pymongo.errors import DuplicateKeyError
-except ImportError as exc:  # pragma: no cover
-    raise ImportError("MongoDBJobStore requires PyMongo installed") from exc
+except ImportError:  # pragma: no cover - optional dependency
+    # The dependency is checked at instantiation time so importing the package
+    # works without optional extras installed.
+    MongoClient = None  # type: ignore[assignment,misc]
+    DuplicateKeyError = None  # type: ignore[assignment,misc]
 
 
 class MongoDBJobStore(JobStore):
@@ -29,6 +32,11 @@ class MongoDBJobStore(JobStore):
         database: str = "schedflow",
         collection: str = "jobs",
     ) -> None:
+        if MongoClient is None:  # pragma: no cover
+            raise ImportError(
+                "MongoDBJobStore requires the 'pymongo' package. "
+                "Install it with: pip install schedflow[mongodb]"
+            )
         self._client = MongoClient(
             host=host,
             port=int(port),

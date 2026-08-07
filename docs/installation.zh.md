@@ -68,7 +68,7 @@ pip install schedflow[web]
 ### 一次性安装全部
 
 ```bash
-pip install schedflow[web,sqlalchemy,mongodb,redis]
+pip install schedflow[all]  # 安装全部可选依赖
 ```
 
 !!! tip "推荐使用 uv 加速安装"

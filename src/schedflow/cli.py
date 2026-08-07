@@ -16,18 +16,26 @@ import subprocess
 import sys
 from pathlib import Path
 
-import uvicorn
-
-from schedflow.api import create_app
 from schedflow.configs.settings import settings
 from schedflow.core import Scheduler
 
-app = create_app(
-    Scheduler(),
-    title="调度器API",
-    description="SchedFlow REST API",
-    version="1.0.0",
-)
+try:
+    import uvicorn
+
+    from schedflow.api import create_app
+
+    app = create_app(
+        Scheduler(),
+        title="调度器API",
+        description="SchedFlow REST API",
+        version="1.0.0",
+    )
+except ImportError:  # pragma: no cover - optional 'web' extra
+    # Importing this module (used by schedflow-frontend and programmatic
+    # entry points) must not require the optional web extra. The backend
+    # command checks uvicorn/app and explains how to install them.
+    uvicorn = None
+    app = None
 
 #: Files the dev reloader should ignore so jobs.db writes and Git fsmonitor
 #: cookies do not spam "X changes detected" logs (or trigger restarts).
@@ -68,6 +76,12 @@ def _backend_parser() -> argparse.ArgumentParser:
 def backend() -> None:
     """Start the backend API server (production by default)."""
     args = _backend_parser().parse_args()
+
+    if uvicorn is None or app is None:  # pragma: no cover
+        raise SystemExit(
+            "schedflow-backend requires the 'web' extra. "
+            "Install it with: pip install schedflow[web]"
+        )
 
     if args.dev:
         settings.RELOAD = True

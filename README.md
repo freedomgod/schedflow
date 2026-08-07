@@ -99,6 +99,7 @@ pip install schedflow[sqlalchemy]      # SQLAlchemy job store
 pip install schedflow[redis]           # Redis job store
 pip install schedflow[mongodb]         # MongoDB job store
 pip install schedflow[web]             # FastAPI Web API
+pip install schedflow[all]             # everything (all optional extras)
 ```
 
 ## Core concepts

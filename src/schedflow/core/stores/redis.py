@@ -16,8 +16,10 @@ from schedflow.core.log import ExecutionLog
 
 try:
     from redis import Redis
-except ImportError as exc:  # pragma: no cover
-    raise ImportError("RedisJobStore requires redis installed") from exc
+except ImportError:  # pragma: no cover - optional dependency
+    # The dependency is checked at instantiation time so importing the package
+    # works without optional extras installed.
+    Redis = None  # type: ignore[assignment,misc]
 
 
 class RedisJobStore(JobStore):
@@ -29,6 +31,11 @@ class RedisJobStore(JobStore):
         *,
         prefix: str = "schedflow",
     ) -> None:
+        if Redis is None:  # pragma: no cover
+            raise ImportError(
+                "RedisJobStore requires the 'redis' package. "
+                "Install it with: pip install schedflow[redis]"
+            )
         self._redis = Redis(
             host=host,
             port=int(port),

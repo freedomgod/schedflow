@@ -25,8 +25,12 @@ from schedflow.core.log import ExecutionLog
 try:
     import sqlalchemy as sa
     from sqlalchemy.exc import IntegrityError, OperationalError
-except ImportError as exc:  # pragma: no cover
-    raise ImportError("SQLAlchemyJobStore requires SQLAlchemy installed") from exc
+except ImportError:  # pragma: no cover - optional dependency
+    # The dependency is checked at instantiation time so importing the package
+    # works without optional extras installed.
+    sa = None  # type: ignore[assignment]
+    IntegrityError = None  # type: ignore[assignment,misc]
+    OperationalError = None  # type: ignore[assignment,misc]
 
 
 _LOCKED_MARKERS = (
@@ -41,6 +45,11 @@ class SQLAlchemyJobStore(JobStore):
     """JobStore backed by any SQLAlchemy-supported database."""
 
     def __init__(self, url: str = "sqlite:///:memory:", *, engine=None) -> None:
+        if sa is None:  # pragma: no cover
+            raise ImportError(
+                "SQLAlchemyJobStore requires the 'sqlalchemy' package. "
+                "Install it with: pip install schedflow[sqlalchemy]"
+            )
         self._engine = engine or sa.create_engine(url)
         self._metadata = sa.MetaData()
         self.jobs = sa.Table(

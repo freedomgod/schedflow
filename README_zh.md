@@ -99,6 +99,7 @@ pip install schedflow[sqlalchemy]      # SQLAlchemy 作业存储
 pip install schedflow[redis]           # Redis 作业存储
 pip install schedflow[mongodb]         # MongoDB 作业存储
 pip install schedflow[web]             # FastAPI Web API
+pip install schedflow[all]             # 全部可选依赖
 ```
 
 ## 核心概念

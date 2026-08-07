@@ -50,6 +50,10 @@ web = [
     "passlib[bcrypt] >= 1.7",
     "PyJWT >= 2.8",
 ]
+all = [
+    # All optional runtime extras in one group.
+    "schedflow[mongodb,redis,sqlalchemy,tornado,twisted,gevent,web]",
+]
 test = [
     "schedflow[mongodb,redis,sqlalchemy,tornado,web]",
     "pytest",
