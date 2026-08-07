@@ -1,0 +1,41 @@
+services:
+  redis:
+    image: redis
+    ports:
+      - 127.0.0.1:6379:6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  mongodb:
+    image: mongo
+    ports:
+      - 127.0.0.1:27017:27017
+    mem_limit: 512M
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  rethinkdb:
+    image: rethinkdb
+    ports:
+      - 127.0.0.1:28015:28015
+
+  zookeeper:
+    image: zookeeper
+    ports:
+      - 127.0.0.1:2181:2181
+    mem_limit: 256M
+
+  etcd:
+    image: bitnamilegacy/etcd:3.5
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+    ports:
+      - 127.0.0.1:2379:2379

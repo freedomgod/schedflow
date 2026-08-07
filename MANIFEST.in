@@ -1,0 +1,4 @@
+include README.md README_zh.md LICENSE.txt
+recursive-include docs *.md *.yml *.yaml
+recursive-include docs *.png *.jpg *.svg *.gif
+prune docs/superpowers

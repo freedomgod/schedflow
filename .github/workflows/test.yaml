@@ -1,0 +1,40 @@
+name: test suite
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Start external services
+      run: docker compose up -d
+    - name: Wait for services to be ready
+      run: |
+        for service in redis mongodb; do
+          echo "Waiting for $service..."
+          docker compose exec -T $service sh -c 'echo "$(hostname) is ready"' || true
+        done
+        # Explicitly ping Redis and MongoDB until they respond (max 60s each)
+        for i in $(seq 1 30); do
+          docker compose exec -T redis redis-cli ping && break || sleep 2
+        done
+        for i in $(seq 1 30); do
+          docker compose exec -T mongodb mongosh --quiet --eval 'db.adminCommand("ping")' && break || sleep 2
+        done
+    - name: Install the project and its dependencies
+      run: pip install -e .[test]
+    - name: Test with pytest
+      run: pytest -v --timeout=120 --timeout-method=thread
