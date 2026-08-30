@@ -67,7 +67,7 @@ def reschedule_job(job_id: str, request: RescheduleRequest, scheduler: Scheduler
 _JOBSTORE_PARAM_SCHEMAS: dict[str, list[dict]] = {
     "memory": [],
     "sqlalchemy": [
-        {"name": "url", "type": "string", "required": True, "label": "数据库URL", "placeholder": "sqlite:///jobs.db"},
+        {"name": "url", "type": "string", "required": True, "label": "数据库URL", "placeholder": "sqlite:///data/jobs.db"},
         {"name": "tableschema", "type": "string", "required": False, "label": "表 Schema", "placeholder": "可选"},
         {"name": "engine_options", "type": "json", "required": False, "label": "引擎选项 (JSON)", "placeholder": "{}"},
     ],

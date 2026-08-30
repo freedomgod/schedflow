@@ -103,13 +103,14 @@ class TestJobStoreListing:
 
 
 class TestGetJobstoreConfig:
-    def test_get_configured_jobstore(self):
+    def test_get_configured_jobstore(self, tmp_path):
         """GET /components/jobstores/configured/{alias} should return config."""
+        db_url = f"sqlite:///{tmp_path.as_posix()}/test.db"
         app = _make_app()
         with TestClient(app, raise_server_exceptions=False) as client:
             client.post("/api/v1/components/jobstores/configure/teststore", json={
                 "type": "sqlalchemy",
-                "config": {"url": "sqlite:///test.db"},
+                "config": {"url": db_url},
             })
             resp = client.get("/api/v1/components/jobstores/configured/teststore")
             assert resp.status_code == 200
@@ -117,7 +118,7 @@ class TestGetJobstoreConfig:
             assert data["code"] == 0
             assert data["data"]["alias"] == "teststore"
             assert data["data"]["type"] == "sqlalchemy"
-            assert data["data"]["config"]["url"] == "sqlite:///test.db"
+            assert data["data"]["config"]["url"] == db_url
 
     def test_get_nonexistent_jobstore_returns_404(self):
         """GET configured jobstore for nonexistent alias should return 404."""

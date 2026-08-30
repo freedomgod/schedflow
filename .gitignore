@@ -1,33 +1,51 @@
+# IDEs / OS
 .project
 .pydevproject
 .idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.tox/
 .coverage
 .cache/
 .pytest_cache/
 .ruff_cache/
-.tox/
-.eggs/
-*.egg-info/
-*.pyc
+virtualenv/
+venv/
+.venv/
+
+# Build outputs
 dist/
 build/
-virtualenv/
-venv*/
-example.sqlite
 site/
-test*.db
+
+# Runtime data (SQLite databases and related files)
+/data/
 *.db
-scheduler_meta.db
-.worktrees/
-.env
-.claude
-.superpowers/
-design-system/
+*.db-journal
+*.sqlite
+*.sqlite3
+example.sqlite
+
+# Frontend
 node_modules/
 .vite/
-uv.lock
+
+# Local configuration
+.env
+
+# Tooling / local scratch
+.claude
+.superpowers/
+.worktrees/
 .playwright-mcp/
 tasks/
+design-system/
+
+# Generated assets at the repository root
 /*.png
 /*.jpg
 /*.jpeg

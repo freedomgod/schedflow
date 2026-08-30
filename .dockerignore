@@ -1,0 +1,41 @@
+# VCS
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.tox/
+.coverage
+
+# Build outputs
+build/
+dist/
+site/
+
+# Runtime data
+data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Frontend build/cache (installed fresh inside the image)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Not needed in the image
+tests/
+docs/
+examples/
+tasks/
+.claude/
+.superpowers/
+.playwright-mcp/
+.env

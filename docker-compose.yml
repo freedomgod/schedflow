@@ -1,4 +1,35 @@
 services:
+  api:
+    build:
+      context: .
+      target: backend
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      SCHEDFLOW_META_DB: /app/data/scheduler_meta.db
+    ports:
+      - 127.0.0.1:8000:8000
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web
+    environment:
+      SCHEDFLOW_API_URL: http://api:8000
+    ports:
+      - 127.0.0.1:4173:4173
+    depends_on:
+      - api
+    restart: unless-stopped
+
   redis:
     image: redis
     ports:

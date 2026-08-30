@@ -6,7 +6,8 @@ including server host/port, logging, database URLs, and more.
 
 The metadata database path (``SCHEDFLOW_META_DB``) is resolved against the
 project root rather than the current working directory, so the same database
-is used no matter where the process is launched from.
+is used no matter where the process is launched from. It defaults to
+``data/scheduler_meta.db`` so runtime files stay out of the repository root.
 """
 
 from pathlib import Path
@@ -52,7 +53,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # ── Metadata DB ──────────────────────────────────────
-    SCHEDFLOW_META_DB: str = "scheduler_meta.db"
+    SCHEDFLOW_META_DB: str = "data/scheduler_meta.db"
 
     @property
     def meta_db_path(self) -> Path:
