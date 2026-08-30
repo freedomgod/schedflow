@@ -145,8 +145,9 @@ uv run schedflow-frontend --dev  # development: Vite dev server with HMR
 ```
 
 Production mode does not watch the filesystem, so runtime writes such as
-`jobs.db` no longer produce noisy "changes detected" output or risk leaving
-multiple scheduler processes behind. In development mode, `jobs.db`, `.git`
+`data/jobs.db` no longer produce noisy "changes detected" output or risk
+leaving multiple scheduler processes behind. In development mode,
+`data/jobs.db`, `.git`
 and other noisy paths are excluded from the reload watcher.
 
 ## Development

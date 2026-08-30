@@ -49,7 +49,7 @@ Python 3.11、3.12、3.13。
 from schedflow.core import Scheduler
 from schedflow.core.stores.sqlalchemy import SQLAlchemyJobStore
 
-scheduler = Scheduler(jobstore=SQLAlchemyJobStore(url="sqlite:///jobs.db"))
+scheduler = Scheduler(jobstore=SQLAlchemyJobStore(url="sqlite:///data/jobs.db"))
 ```
 
 ### 能否运行多个调度器实例？
@@ -58,9 +58,9 @@ scheduler = Scheduler(jobstore=SQLAlchemyJobStore(url="sqlite:///jobs.db"))
 
 ### 启动后端时为什么输出大量 “X changes detected”？
 
-那是 uvicorn **热重载（reload）** 的文件监听器（watchfiles）打印的。默认启动方式是生产模式（`RELOAD=false`），不会监听文件；只有使用 `schedflow-backend --dev` 时才会开启热重载。开发模式下已把运行期会持续变化的路径加入排除列表（`jobs.db`、`*.db-journal`、`.git/**`、`node_modules/**`、`dist/**`），因此 jobs.db 写入和 Git fsmonitor 的临时文件不会再触发这类输出。
+那是 uvicorn **热重载（reload）** 的文件监听器（watchfiles）打印的。默认启动方式是生产模式（`RELOAD=false`），不会监听文件；只有使用 `schedflow-backend --dev` 时才会开启热重载。开发模式下已把运行期会持续变化的路径加入排除列表（`data/jobs.db`、`*.db-journal`、`.git/**`、`node_modules/**`、`dist/**`），因此 data/jobs.db 写入和 Git fsmonitor 的临时文件不会再触发这类输出。
 
-另外，热重载会在代码变更时重建调度器进程，若旧进程没有干净退出，会出现多个调度器同时写同一个 `jobs.db`，可能造成同一作业重复执行（这也是此前“几秒内执行几十次”的诱因之一）。**生产部署请直接运行 `uv run schedflow-backend`（不带 `--dev`），并确保同一时间只有一个后端进程。**
+另外，热重载会在代码变更时重建调度器进程，若旧进程没有干净退出，会出现多个调度器同时写同一个 `data/jobs.db`，可能造成同一作业重复执行（这也是此前“几秒内执行几十次”的诱因之一）。**生产部署请直接运行 `uv run schedflow-backend`（不带 `--dev`），并确保同一时间只有一个后端进程。**
 
 ### 进程池在 Windows 上能用吗？
 

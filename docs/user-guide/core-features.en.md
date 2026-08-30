@@ -134,7 +134,7 @@ Job stores persist job definitions and execution logs. `JobStore` is an explicit
 from schedflow.core import Scheduler
 from schedflow.core.stores.sqlalchemy import SQLAlchemyJobStore
 
-store = SQLAlchemyJobStore(url="sqlite:///jobs.db")
+store = SQLAlchemyJobStore(url="sqlite:///data/jobs.db")
 scheduler = Scheduler(jobstore=store)
 ```
 
@@ -439,7 +439,7 @@ The bundled management metadata (users, API keys, theme, variables) is read from
 APP_ENV=production
 HOST=0.0.0.0
 PORT=8000
-SCHEDFLOW_META_DB=scheduler_meta.db
+SCHEDFLOW_META_DB=data/scheduler_meta.db
 ```
 
 The shipped defaults are **production-safe** (`APP_ENV=production`,
@@ -454,5 +454,5 @@ uv run schedflow-frontend --dev
 ```
 
 Production mode does not watch the filesystem, so runtime writes such as
-`jobs.db` no longer produce "changes detected" output, and hot reload cannot
-leave multiple scheduler processes behind.
+`data/jobs.db` no longer produce "changes detected" output, and hot reload
+cannot leave multiple scheduler processes behind.

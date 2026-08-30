@@ -134,7 +134,7 @@ trigger = Trigger.from_dict(data)   # 从 JSON 重建（Trigger 即 BaseTrigger 
 from schedflow.core import Scheduler
 from schedflow.core.stores.sqlalchemy import SQLAlchemyJobStore
 
-store = SQLAlchemyJobStore(url="sqlite:///jobs.db")
+store = SQLAlchemyJobStore(url="sqlite:///data/jobs.db")
 scheduler = Scheduler(jobstore=store)
 ```
 
@@ -445,7 +445,7 @@ Scheduler(project_root="/data/projects/my_app")
 APP_ENV=production
 HOST=0.0.0.0
 PORT=8000
-SCHEDFLOW_META_DB=scheduler_meta.db
+SCHEDFLOW_META_DB=data/scheduler_meta.db
 ```
 
 内置默认即为**生产环境**（`APP_ENV=production`、`RELOAD=false`、`LOG_LEVEL=INFO`），
@@ -457,5 +457,5 @@ uv run schedflow-backend --dev
 uv run schedflow-frontend --dev
 ```
 
-生产模式不监听文件系统，因此运行期写入（如 `jobs.db`）不会产生
+生产模式不监听文件系统，因此运行期写入（如 `data/jobs.db`）不会产生
 “changes detected”输出，也不会因热重载产生多个调度器进程。

@@ -49,7 +49,7 @@ Use a persistent store such as `SQLAlchemyJobStore`, `RedisJobStore` or `MongoDB
 from schedflow.core import Scheduler
 from schedflow.core.stores.sqlalchemy import SQLAlchemyJobStore
 
-scheduler = Scheduler(jobstore=SQLAlchemyJobStore(url="sqlite:///jobs.db"))
+scheduler = Scheduler(jobstore=SQLAlchemyJobStore(url="sqlite:///data/jobs.db"))
 ```
 
 ### Can I run multiple scheduler instances?
@@ -61,17 +61,17 @@ Multiple instances sharing one persistent store see the same job definitions, bu
 That output comes from uvicorn's **reload watcher** (watchfiles). The default
 startup is production mode (`RELOAD=false`), which does not watch the
 filesystem; hot reload is only enabled with `schedflow-backend --dev`. In
-development mode, paths that change constantly at runtime are excluded from
-the watcher (`jobs.db`, `*.db-journal`, `.git/**`, `node_modules/**`,
-`dist/**`), so jobs.db writes and Git fsmonitor cookies no longer spam that
-output.
+  development mode, paths that change constantly at runtime are excluded from
+  the watcher (`data/jobs.db`, `*.db-journal`, `.git/**`, `node_modules/**`,
+  `dist/**`), so data/jobs.db writes and Git fsmonitor cookies no longer spam
+  that output.
 
 Hot reload also rebuilds the scheduler process on code changes; if an old
-process does not exit cleanly, several schedulers may write the same
-`jobs.db` at once and duplicate executions can occur (one of the triggers
-behind the earlier "dozens of runs in seconds" bug). **For production, run
-`uv run schedflow-backend` without `--dev` and keep exactly one backend
-process alive.**
+  process does not exit cleanly, several schedulers may write the same
+  `data/jobs.db` at once and duplicate executions can occur (one of the
+  triggers behind the earlier "dozens of runs in seconds" bug). **For
+  production, run `uv run schedflow-backend` without `--dev` and keep exactly
+  one backend process alive.**
 
 ### Does the process pool work on Windows?
 
