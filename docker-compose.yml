@@ -11,11 +11,6 @@ services:
       - 127.0.0.1:8000:8000
     volumes:
       - ./data:/app/data
-    depends_on:
-      redis:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
     restart: unless-stopped
 
   web:
@@ -31,6 +26,7 @@ services:
     restart: unless-stopped
 
   redis:
+    profiles: ["infra"]
     image: redis
     ports:
       - 127.0.0.1:6379:6379
@@ -42,6 +38,7 @@ services:
       start_period: 5s
 
   mongodb:
+    profiles: ["infra"]
     image: mongo
     ports:
       - 127.0.0.1:27017:27017
@@ -54,17 +51,20 @@ services:
       start_period: 10s
 
   rethinkdb:
+    profiles: ["infra"]
     image: rethinkdb
     ports:
       - 127.0.0.1:28015:28015
 
   zookeeper:
+    profiles: ["infra"]
     image: zookeeper
     ports:
       - 127.0.0.1:2181:2181
     mem_limit: 256M
 
   etcd:
+    profiles: ["infra"]
     image: bitnamilegacy/etcd:3.5
     environment:
       - ALLOW_NONE_AUTHENTICATION=yes

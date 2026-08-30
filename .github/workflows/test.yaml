@@ -20,7 +20,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Start external services
-      run: docker compose up -d
+      run: docker compose --profile infra up -d redis mongodb
     - name: Wait for services to be ready
       run: |
         for service in redis mongodb; do
