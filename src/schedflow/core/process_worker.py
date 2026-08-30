@@ -7,15 +7,13 @@ objects are ever pickled across processes.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from schedflow.core.job import Job
 
 
 def run_job_in_process(
     job_dict: dict,
     run_time_iso: str,
-    project_root: Optional[str],
+    project_root: str | None,
 ) -> dict:
     """Rebuild the job, execute it and return the serialized execution log."""
     job = Job.from_dict(job_dict, project_root=project_root)

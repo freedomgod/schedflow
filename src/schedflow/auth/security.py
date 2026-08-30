@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from fastapi import Request
 
-from schedflow.auth.services import verify_jwt_token, verify_api_key
+from schedflow.auth.services import verify_api_key, verify_jwt_token
 
 
 @dataclass

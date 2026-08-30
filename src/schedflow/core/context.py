@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 
 class RunContext:
@@ -18,16 +17,16 @@ class RunContext:
         logger: logger used for execution diagnostics.
     """
 
-    __slots__ = ("project_root", "env", "cwd", "timeout", "logger")
+    __slots__ = ("cwd", "env", "logger", "project_root", "timeout")
 
     def __init__(
         self,
         *,
-        project_root: Optional[str | Path] = None,
-        env: Optional[dict] = None,
-        cwd: Optional[str | Path] = None,
-        timeout: Optional[float] = None,
-        logger: Optional[logging.Logger] = None,
+        project_root: str | Path | None = None,
+        env: dict | None = None,
+        cwd: str | Path | None = None,
+        timeout: float | None = None,
+        logger: logging.Logger | None = None,
     ) -> None:
         self.project_root = (
             Path(project_root) if project_root is not None else None

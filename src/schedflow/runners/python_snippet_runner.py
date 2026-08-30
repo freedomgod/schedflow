@@ -3,14 +3,14 @@
 import os
 import subprocess
 import sys
-from typing import Optional
 
 from schedflow.core.result import TaskResult
+
 from .base import BaseRunner, RunContext
 
 
 class PythonSnippetRunner(BaseRunner):
-    def run(self, spec, *, context: Optional[RunContext] = None, **kwargs) -> TaskResult:
+    def run(self, spec, *, context: RunContext | None = None, **kwargs) -> TaskResult:
         context = context or RunContext()
         cmd = [sys.executable, '-c', spec.script]
         timeout = getattr(spec, "timeout", None) or context.timeout or 300
@@ -24,6 +24,7 @@ class PythonSnippetRunner(BaseRunner):
                 timeout=timeout,
                 env=env,
                 cwd=cwd,
+                check=False,
             )
             return TaskResult(
                 succeeded=completed.returncode == 0,

@@ -1,33 +1,27 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, tzinfo
-from typing import Any, Dict, Optional
+from typing import Any
+
+from pydantic import Field, field_serializer, model_validator
 from tzlocal import get_localzone
 
-from pydantic import (
-    Field, model_validator, field_serializer, ConfigDict
-)
-
 from schedflow.triggers.base import BaseTrigger, TriggerBaseConfigModel
-from schedflow.utils import (
-    convert_to_date,
-    astimezone,
-    timezone_repr
-)
+from schedflow.utils import astimezone, convert_to_date, timezone_repr
 
 
 class CalendarIntervalTriggerModel(TriggerBaseConfigModel):
-    years: Optional[int] = Field(default=0, description="年份")
-    months: Optional[int] = Field(default=0, description="月份")
-    weeks: Optional[int] = Field(default=0, description="周")
-    days: Optional[int] = Field(default=0, description="天数")
-    hour: Optional[int] = Field(default=0, description="小时")
-    minute: Optional[int] = Field(default=0, description="分钟")
-    second: Optional[int] = Field(default=0, description="秒钟")
-    start_date: Optional[date|str] = Field(default=None, description="开始计算运行时间的起始时间")
-    end_date: Optional[date|str] = Field(default=None, description="最后可能结束触发的运行时间")
-    timezone: Optional[tzinfo|str] = Field(default=None, description="计算所用的时区")
-    jitter: Optional[int] = Field(default=None, description="任务最多延迟执行的时间")
+    years: int | None = Field(default=0, description="年份")
+    months: int | None = Field(default=0, description="月份")
+    weeks: int | None = Field(default=0, description="周")
+    days: int | None = Field(default=0, description="天数")
+    hour: int | None = Field(default=0, description="小时")
+    minute: int | None = Field(default=0, description="分钟")
+    second: int | None = Field(default=0, description="秒钟")
+    start_date: date | str | None = Field(default=None, description="开始计算运行时间的起始时间")
+    end_date: date | str | None = Field(default=None, description="最后可能结束触发的运行时间")
+    timezone: tzinfo | str | None = Field(default=None, description="计算所用的时区")
+    jitter: int | None = Field(default=None, description="任务最多延迟执行的时间")
 
     @field_serializer('timezone')
     def serialize_tz(self, tz: tzinfo, _info) -> str:
@@ -35,7 +29,7 @@ class CalendarIntervalTriggerModel(TriggerBaseConfigModel):
 
     @model_validator(mode='before')
     @classmethod
-    def model_field_validator(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def model_field_validator(cls, data: dict[str, Any]) -> dict[str, Any]:
         if data.get('timezone'):
             data['timezone'] = astimezone(data.get('timezone'))
         else:
@@ -100,14 +94,14 @@ class CalendarIntervalTrigger(BaseTrigger):
     """
 
     __slots__ = (
-        "years",
-        "months",
-        "weeks",
         "days",
-        "start_date",
         "end_date",
-        "timezone",
         "jitter",
+        "months",
+        "start_date",
+        "timezone",
+        "weeks",
+        "years",
     )
     _trigger_type = "calendarinterval"
     _pydantic_model_cls = CalendarIntervalTriggerModel
@@ -125,7 +119,7 @@ class CalendarIntervalTrigger(BaseTrigger):
         start_date=None,
         end_date=None,
         timezone=None,
-        jitter: Optional[int] = None,
+        jitter: int | None = None,
     ):
         super().__init__(
             None,

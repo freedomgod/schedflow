@@ -2,10 +2,10 @@
 
 __all__ = (
     "AllExpression",
-    "RangeExpression",
-    "WeekdayRangeExpression",
-    "WeekdayPositionExpression",
     "LastDayOfMonthExpression",
+    "RangeExpression",
+    "WeekdayPositionExpression",
+    "WeekdayRangeExpression",
 )
 
 import re
@@ -68,7 +68,7 @@ class AllExpression:
 
     def __str__(self):
         if self.step:
-            return "*/%d" % self.step
+            return f"*/{self.step}"
         return "*"
 
     def __repr__(self):
@@ -136,18 +136,18 @@ class RangeExpression(AllExpression):
 
     def __str__(self):
         if self.last != self.first and self.last is not None:
-            range = "%d-%d" % (self.first, self.last)
+            range = f"{self.first}-{self.last}"
         else:
             range = str(self.first)
 
         if self.step:
-            return "%s/%d" % (range, self.step)
+            return f"{range}/{self.step}"
 
         return range
 
     def __repr__(self):
         args = [str(self.first)]
-        if self.last != self.first and self.last is not None or self.step:
+        if (self.last != self.first and self.last is not None) or self.step:
             args.append(str(self.last))
 
         if self.step:
@@ -219,7 +219,7 @@ class WeekdayRangeExpression(RangeExpression):
 
 
 class WeekdayPositionExpression(AllExpression):
-    options = ["1st", "2nd", "3rd", "4th", "5th", "last"]
+    options = ("1st", "2nd", "3rd", "4th", "5th", "last")
     value_re = re.compile(
         r"(?P<option_name>{}) +(?P<weekday_name>(?:\d+|\w+))".format("|".join(options)),
         re.IGNORECASE,

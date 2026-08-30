@@ -10,7 +10,11 @@ from schedflow.triggers.cron.expressions import (
     WeekdayPositionExpression,
     WeekdayRangeExpression,
 )
-from schedflow.triggers.cron.fields import BaseField, DayOfMonthField, DayOfWeekField, MonthField
+from schedflow.triggers.cron.fields import (
+    BaseField,
+    DayOfMonthField,
+    DayOfWeekField,
+)
 
 
 def test_all_expression():
@@ -36,7 +40,8 @@ def test_all_expression_step():
 
 
 def test_all_expression_invalid():
-    pytest.raises(ValueError, BaseField, "hour", "*/0")
+    with pytest.raises(ValueError):
+        BaseField("hour", "*/0")
 
 
 def test_all_expression_repr():
@@ -83,7 +88,8 @@ def test_range_expression_single():
 
 
 def test_range_expression_invalid():
-    pytest.raises(ValueError, DayOfMonthField, "day", "5-3")
+    with pytest.raises(ValueError):
+        DayOfMonthField("day", "5-3")
 
 
 def test_range_expression_repr():
@@ -137,11 +143,13 @@ def test_weekday_pos_3():
 
 
 def test_day_of_week_invalid_pos():
-    pytest.raises(ValueError, WeekdayPositionExpression, "6th", "fri")
+    with pytest.raises(ValueError):
+        WeekdayPositionExpression("6th", "fri")
 
 
 def test_day_of_week_invalid_name():
-    pytest.raises(ValueError, WeekdayPositionExpression, "1st", "moh")
+    with pytest.raises(ValueError):
+        WeekdayPositionExpression("1st", "moh")
 
 
 def test_weekday_position_expression_repr():
@@ -150,11 +158,13 @@ def test_weekday_position_expression_repr():
 
 
 def test_day_of_week_invalid_first():
-    pytest.raises(ValueError, WeekdayRangeExpression, "moh", "fri")
+    with pytest.raises(ValueError):
+        WeekdayRangeExpression("moh", "fri")
 
 
 def test_day_of_week_invalid_last():
-    pytest.raises(ValueError, WeekdayRangeExpression, "mon", "fre")
+    with pytest.raises(ValueError):
+        WeekdayRangeExpression("mon", "fre")
 
 
 def test_weekday_range_expression_repr():

@@ -1,15 +1,17 @@
 import os
 import platform
 import sys
-from datetime import date, datetime, timedelta, timezone, tzinfo
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from functools import partial, wraps
 from types import ModuleType
 from unittest.mock import Mock
+from zoneinfo import ZoneInfo
 
 import pytest
 import pytz
 
 from schedflow.utils import (
+    CustomTypeID,
     asbool,
     asint,
     astimezone,
@@ -27,17 +29,11 @@ from schedflow.utils import (
     normalize,
     obj_to_ref,
     ref_to_obj,
-    timezone_repr,
     timedelta_seconds,
+    timezone_repr,
     undefined,
     utc_timestamp_to_datetime,
-    CustomTypeID,
 )
-
-if sys.version_info < (3, 9):
-    from backports.zoneinfo import ZoneInfo
-else:
-    from zoneinfo import ZoneInfo
 
 
 class DummyClass:
@@ -68,7 +64,8 @@ class InheritedDummyClass(DummyClass):
 class TestAsint:
     @pytest.mark.parametrize("value", ["5s", "shplse"], ids=["digit first", "text"])
     def test_invalid_value(self, value):
-        pytest.raises(ValueError, asint, value)
+        with pytest.raises(ValueError):
+            asint(value)
 
     def test_number(self):
         assert asint("539") == 539
@@ -109,7 +106,8 @@ class TestAsbool:
         assert asbool(value) is False
 
     def test_bad_value(self):
-        pytest.raises(ValueError, asbool, "yep")
+        with pytest.raises(ValueError):
+            asbool("yep")
 
 
 class TestAstimezone:
@@ -125,17 +123,21 @@ class TestAstimezone:
         assert astimezone(None) is None
 
     def test_bad_timezone_type(self):
-        pytest.raises(NotImplementedError, astimezone, tzinfo()).match(
-            r"(a )?tzinfo subclass must (implement|override) tzname\(\)"
-        )
+        with pytest.raises(
+            NotImplementedError,
+            match=r"(a )?tzinfo subclass must (implement|override) tzname\(\)",
+        ):
+            astimezone(tzinfo())
 
     def test_bad_local_timezone(self):
         zone = Mock(tzinfo, localize=None, normalize=None, tzname=lambda dt: "local")
-        exc = pytest.raises(ValueError, astimezone, zone)
+        with pytest.raises(ValueError) as exc:
+            astimezone(zone)
         assert "Unable to determine the name of the local timezone" in str(exc.value)
 
     def test_bad_value(self):
-        exc = pytest.raises(TypeError, astimezone, 4)
+        with pytest.raises(TypeError) as exc:
+            astimezone(4)
         assert "Expected tzinfo, got int instead" in str(exc.value)
 
 
@@ -183,19 +185,18 @@ class TestConvertToDatetime:
         assert returned == expected
 
     def test_invalid_input_type(self, timezone):
-        exc = pytest.raises(TypeError, convert_to_datetime, 92123, timezone)
+        with pytest.raises(TypeError) as exc:
+            convert_to_datetime(92123, timezone)
         assert "Unsupported input type" in str(exc.value) and "int" in str(exc.value)
 
     def test_invalid_input_value(self, timezone):
-        exc = pytest.raises(
-            ValueError, convert_to_datetime, "19700-12-1", timezone
-        )
+        with pytest.raises(ValueError) as exc:
+            convert_to_datetime("19700-12-1", timezone)
         assert str(exc.value) == "Invalid date string"
 
     def test_missing_timezone(self):
-        exc = pytest.raises(
-            ValueError, convert_to_datetime, "2009-8-1", None
-        )
+        with pytest.raises(ValueError) as exc:
+            convert_to_datetime("2009-8-1", None)
         assert "missing timezone information" in str(exc.value).lower()
 
     def test_text_timezone(self):
@@ -272,7 +273,8 @@ class TestGetCallableName:
         assert get_callable_name(input) == expected
 
     def test_bad_input(self):
-        pytest.raises(TypeError, get_callable_name, object())
+        with pytest.raises(TypeError):
+            get_callable_name(object())
 
 
 class TestObjToRef:
@@ -290,7 +292,8 @@ class TestObjToRef:
         ids=["partial", "lambda"],
     )
     def test_errors(self, obj, error):
-        exc = pytest.raises(ValueError, obj_to_ref, obj)
+        with pytest.raises(ValueError) as exc:
+            obj_to_ref(obj)
         assert str(exc.value) == error
 
     @pytest.mark.skipif(
@@ -300,7 +303,8 @@ class TestObjToRef:
         def nested():
             pass
 
-        exc = pytest.raises(ValueError, obj_to_ref, nested)
+        with pytest.raises(ValueError) as exc:
+            obj_to_ref(nested)
         assert str(exc.value) == "Cannot create a reference to a nested function"
 
     @pytest.mark.parametrize(
@@ -368,7 +372,8 @@ class TestRefToObj:
         ids=["raw object", "module", "module attribute"],
     )
     def test_lookup_error(self, input, error):
-        pytest.raises(error, ref_to_obj, input)
+        with pytest.raises(error):
+            ref_to_obj(input)
 
 
 @pytest.mark.parametrize(
@@ -387,7 +392,8 @@ class TestCheckCallableArgs:
         exception.
 
         """
-        exc = pytest.raises(ValueError, check_callable_args, lambda x: None, [1, 2], {})
+        with pytest.raises(ValueError) as exc:
+            check_callable_args(lambda x: None, [1, 2], {})
         assert str(exc.value) == (
             "The list of positional arguments is longer than the target callable can handle "
             "(allowed: 1, given in args: 2)"
@@ -399,25 +405,22 @@ class TestCheckCallableArgs:
         exception.
 
         """
-        exc = pytest.raises(
-            ValueError, check_callable_args, lambda x: None, [], {"x": 0, "y": 1}
-        )
+        with pytest.raises(ValueError) as exc:
+            check_callable_args(lambda x: None, [], {"x": 0, "y": 1})
         assert str(exc.value) == (
             "The target callable does not accept the following keyword arguments: y"
         )
 
     def test_missing_callable_args(self):
         """Tests that attempting to schedule a job with missing arguments raises an exception."""
-        exc = pytest.raises(
-            ValueError, check_callable_args, lambda x, y, z: None, [1], {"y": 0}
-        )
+        with pytest.raises(ValueError) as exc:
+            check_callable_args(lambda x, y, z: None, [1], {"y": 0})
         assert str(exc.value) == "The following arguments have not been supplied: z"
 
     def test_default_args(self):
         """Tests that default values for arguments are properly taken into account."""
-        exc = pytest.raises(
-            ValueError, check_callable_args, lambda x, y, z=1: None, [1], {}
-        )
+        with pytest.raises(ValueError) as exc:
+            check_callable_args(lambda x, y, z=1: None, [1], {})
         assert str(exc.value) == "The following arguments have not been supplied: y"
 
     def test_conflicting_callable_args(self):
@@ -426,9 +429,8 @@ class TestCheckCallableArgs:
         conflict raises an exception.
 
         """
-        exc = pytest.raises(
-            ValueError, check_callable_args, lambda x, y: None, [1, 2], {"y": 1}
-        )
+        with pytest.raises(ValueError) as exc:
+            check_callable_args(lambda x, y: None, [1, 2], {"y": 1})
         assert (
             str(exc.value)
             == "The following arguments are supplied in both args and kwargs: y"
@@ -448,9 +450,8 @@ class TestCheckCallableArgs:
         exception.
 
         """
-        exc = pytest.raises(
-            ValueError, check_callable_args, object.__setattr__, ["blah"], {"value": 1}
-        )
+        with pytest.raises(ValueError) as exc:
+            check_callable_args(object.__setattr__, ["blah"], {"value": 1})
         assert str(exc.value) == (
             "The following arguments cannot be given as keyword arguments: value"
         )
@@ -462,7 +463,8 @@ class TestCheckCallableArgs:
 
         """
         func = eval("lambda x, *, y, z=1: None")
-        exc = pytest.raises(ValueError, check_callable_args, func, [1], {})
+        with pytest.raises(ValueError) as exc:
+            check_callable_args(func, [1], {})
         assert str(exc.value) == (
             "The following keyword-only arguments have not been supplied in "
             "kwargs: y"
@@ -505,7 +507,7 @@ class TestIsCoroutineFunctionPartial:
 
 class TestNormalize:
     def test_normalize_preserves_time(self):
-        dt = datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)
+        dt = datetime(2023, 10, 1, 12, 0, 0, tzinfo=UTC)
         result = normalize(dt)
         assert result == dt
 
@@ -538,7 +540,7 @@ class TestDatetimeToString:
         assert result == "2023-10-01T12:00:00"
 
     def test_utc_timezone_becomes_z(self):
-        dt = datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)
+        dt = datetime(2023, 10, 1, 12, 0, 0, tzinfo=UTC)
         result = datetime_to_string(dt)
         assert result.endswith("Z")
 
@@ -555,7 +557,7 @@ class TestTimezoneRepr:
         assert timezone_repr(tz) == "Europe/Helsinki"
 
     def test_other_tzinfo_returns_repr(self):
-        result = timezone_repr(timezone.utc)
+        result = timezone_repr(UTC)
         assert "utc" in result.lower() or "timezone" in result
 
 

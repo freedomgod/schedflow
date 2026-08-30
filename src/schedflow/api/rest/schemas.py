@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -15,13 +15,13 @@ class TaskSpecIn(BaseModel):
     type: Literal["python_callable", "bash", "python", "python_script"] = (
         "python_callable"
     )
-    ref: Optional[str] = None
-    command: Optional[str] = None
-    script_path: Optional[str] = None
-    script: Optional[str] = None
+    ref: str | None = None
+    command: str | None = None
+    script_path: str | None = None
+    script: str | None = None
     args: list = Field(default_factory=list)
     kwargs: dict = Field(default_factory=dict)
-    timeout: Optional[float] = None
+    timeout: float | None = None
 
     def to_spec(self) -> TaskSpec:
         return TaskSpec.from_dict(self.model_dump())
@@ -29,15 +29,15 @@ class TaskSpecIn(BaseModel):
 
 class NodeIn(BaseModel):
     node_id: str
-    task: Union[str, TaskSpecIn]
-    name: Optional[str] = None
-    description: Optional[str] = None
+    task: str | TaskSpecIn
+    name: str | None = None
+    description: str | None = None
     retries: int = 1
-    on_success: Optional[TaskSpecIn] = None
-    on_failure: Optional[TaskSpecIn] = None
+    on_success: TaskSpecIn | None = None
+    on_failure: TaskSpecIn | None = None
 
     @model_validator(mode="after")
-    def _normalize_task(self) -> "NodeIn":
+    def _normalize_task(self) -> NodeIn:
         if isinstance(self.task, str):
             self.task = TaskSpecIn(ref=self.task)
         return self
@@ -46,14 +46,14 @@ class NodeIn(BaseModel):
 class EdgeIn(BaseModel):
     source: str
     target: str
-    condition: Optional[TaskSpecIn] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
+    condition: TaskSpecIn | None = None
+    name: str | None = None
+    description: str | None = None
 
 
 class WorkflowIn(BaseModel):
-    flow_id: Optional[str] = None
-    project_root: Optional[str] = None
+    flow_id: str | None = None
+    project_root: str | None = None
     nodes: list[NodeIn] = Field(min_length=1)
     edges: list[EdgeIn] = Field(default_factory=list)
 
@@ -100,28 +100,28 @@ class TriggerIn(BaseModel):
 
 class JobCreateRequest(BaseModel):
     workflow: WorkflowIn
-    trigger: Optional[TriggerIn] = None
-    job_id: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
+    trigger: TriggerIn | None = None
+    job_id: str | None = None
+    name: str | None = None
+    description: str | None = None
     executor_alias: str = "default"
     jobstore_alias: str = "default"
-    misfire_grace_time: Optional[int] = None
+    misfire_grace_time: int | None = None
     coalesce: bool = True
     max_instances: int = 1
     replace: bool = False
 
 
 class JobUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    workflow: Optional[WorkflowIn] = None
-    trigger: Optional[TriggerIn] = None
-    executor_alias: Optional[str] = None
-    jobstore_alias: Optional[str] = None
-    misfire_grace_time: Optional[int] = None
-    coalesce: Optional[bool] = None
-    max_instances: Optional[int] = None
+    name: str | None = None
+    description: str | None = None
+    workflow: WorkflowIn | None = None
+    trigger: TriggerIn | None = None
+    executor_alias: str | None = None
+    jobstore_alias: str | None = None
+    misfire_grace_time: int | None = None
+    coalesce: bool | None = None
+    max_instances: int | None = None
 
 
 class RescheduleRequest(BaseModel):

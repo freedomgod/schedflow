@@ -40,8 +40,8 @@ def create_app(
     app.router.lifespan_context = _lifespan
 
     if include_auth:
-        from schedflow.auth.security import APIKeyBackend, JWTBackend
         from schedflow.api.middleware import AuthMiddleware
+        from schedflow.auth.security import APIKeyBackend, JWTBackend
 
         app.add_middleware(
             AuthMiddleware,

@@ -1,18 +1,16 @@
-from typing import Optional, Any, Dict, Mapping
 from datetime import datetime, tzinfo
+from typing import Any
+
+from pydantic import ConfigDict, Field, field_serializer, model_validator
 from tzlocal import get_localzone
 
-from pydantic import (
-    Field, ConfigDict, model_validator, field_serializer
-)
-
 from schedflow.triggers.base import BaseTrigger, TriggerBaseConfigModel
-from schedflow.utils import astimezone, datetime_repr, convert_to_datetime
+from schedflow.utils import astimezone, convert_to_datetime, datetime_repr
 
 
 class DateTriggerModel(TriggerBaseConfigModel):
-    run_date: Optional[datetime|str] = Field(default=None, description="执行时间")
-    timezone: Optional[tzinfo|str] = Field(default=None, description="计算所用的时区")
+    run_date: datetime | str | None = Field(default=None, description="执行时间")
+    timezone: tzinfo | str | None = Field(default=None, description="计算所用的时区")
 
     model_config = ConfigDict(
         json_schema_extra = {
@@ -28,7 +26,7 @@ class DateTriggerModel(TriggerBaseConfigModel):
 
     @model_validator(mode='before')
     @classmethod
-    def validate_date_trigger(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_date_trigger(cls, data: dict[str, Any]) -> dict[str, Any]:
         """模型前置处理器：处理时区和日期"""
         effective_tz = astimezone(data.get('timezone')) or get_localzone()
         data['timezone'] = effective_tz
@@ -36,7 +34,7 @@ class DateTriggerModel(TriggerBaseConfigModel):
             data['run_date'] = convert_to_datetime(data.get("run_date"), effective_tz)
         else:
             data['run_date'] = datetime.now(effective_tz)
-        
+
         return data
 
 

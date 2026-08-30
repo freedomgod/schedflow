@@ -136,9 +136,14 @@ ignore = [
     # FastAPI 惯例：依赖注入通过默认参数 Depends(...) 实现，
     # 属于框架标准写法，不需要规避。
     "B008",
+    # 调度器按设计使用“本地朴素时间”（tzlocal），触发器/测试中大量
+    # 直接构造 naive datetime；不适用 DTZ 系列规则。
+    "DTZ001",
+    "DTZ005",
+    "DTZ011",
 ]
 # 中文 UI 文案使用全角标点是正常书写，不属于“混淆字符”误用
-allowed-confusables = ["，"]
+allowed-confusables = ["，", "–", "；", "：", "！", "（", "）"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["schedflow"]

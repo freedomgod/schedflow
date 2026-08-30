@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime
-from typing import Optional
 
 from schedflow.core.job import Job
 from schedflow.core.jobstore import (
@@ -132,7 +131,7 @@ class SQLAlchemyJobStore(JobStore):
             if result.rowcount == 0:
                 raise JobNotFoundError(job_id)
 
-    def get(self, job_id: str) -> Optional[Job]:
+    def get(self, job_id: str) -> Job | None:
         self._ensure()
         with self._engine.connect() as connection:
             raw = connection.execute(
@@ -160,7 +159,7 @@ class SQLAlchemyJobStore(JobStore):
         paused = [job for job in jobs if job.next_run_time is None]
         return scheduled + paused
 
-    def get_next_run_time(self) -> Optional[datetime]:
+    def get_next_run_time(self) -> datetime | None:
         candidates = [
             job.next_run_time
             for job in self._load_all()
@@ -195,7 +194,7 @@ class SQLAlchemyJobStore(JobStore):
             ).scalars().all()
         return [ExecutionLog.from_dict(json.loads(raw)) for raw in raw_rows]
 
-    def get_log(self, job_id: str, log_id: str) -> Optional[ExecutionLog]:
+    def get_log(self, job_id: str, log_id: str) -> ExecutionLog | None:
         for log in self.get_logs(job_id):
             if log.log_id == log_id:
                 return log

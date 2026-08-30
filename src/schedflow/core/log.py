@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from schedflow.utils import CustomTypeID
 
 TaskStatus = ("pending", "running", "succeeded", "failed", "skipped")
 
 
-def _iso(value: Optional[datetime]) -> Optional[str]:
+def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-def _from_iso(value: Optional[str]) -> Optional[datetime]:
+def _from_iso(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value is not None else None
 
 
@@ -22,34 +22,34 @@ class TaskRecord:
     """Execution record for a single workflow node."""
 
     __slots__ = (
-        "node_id",
-        "task_id",
-        "status",
-        "result",
-        "error",
-        "skip_reason",
-        "stdout",
-        "stderr",
-        "exit_code",
-        "start_time",
-        "end_time",
         "duration",
+        "end_time",
+        "error",
+        "exit_code",
+        "node_id",
+        "result",
+        "skip_reason",
+        "start_time",
+        "status",
+        "stderr",
+        "stdout",
+        "task_id",
     )
 
     def __init__(
         self,
         node_id: str,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
         status: str = "pending",
         result: Any = None,
-        error: Optional[str] = None,
-        skip_reason: Optional[str] = None,
-        stdout: Optional[str] = None,
-        stderr: Optional[str] = None,
-        exit_code: Optional[int] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-        duration: Optional[float] = None,
+        error: str | None = None,
+        skip_reason: str | None = None,
+        stdout: str | None = None,
+        stderr: str | None = None,
+        exit_code: int | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        duration: float | None = None,
     ) -> None:
         if status not in TaskStatus:
             raise ValueError(f"Unknown task status {status!r}")
@@ -107,7 +107,7 @@ class TaskRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "TaskRecord":
+    def from_dict(cls, data: dict) -> TaskRecord:
         return cls(
             node_id=data["node_id"],
             task_id=data.get("task_id"),
@@ -131,30 +131,30 @@ class ExecutionLog:
     """Record of one workflow execution (per run of a job or direct run)."""
 
     __slots__ = (
-        "log_id",
-        "job_id",
-        "flow_id",
-        "start_time",
-        "end_time",
-        "records",
         "dag_snapshot",
+        "end_time",
+        "flow_id",
+        "job_id",
+        "log_id",
+        "records",
+        "start_time",
     )
 
     def __init__(
         self,
-        flow_id: Optional[str] = None,
+        flow_id: str | None = None,
         *,
-        job_id: Optional[str] = None,
-        log_id: Optional[str] = None,
-        start_time: Optional[datetime] = None,
+        job_id: str | None = None,
+        log_id: str | None = None,
+        start_time: datetime | None = None,
     ) -> None:
         self.log_id = log_id or CustomTypeID.full_str("flowlog")
         self.flow_id = flow_id
         self.job_id = job_id
         self.start_time = start_time or datetime.now()
-        self.end_time: Optional[datetime] = None
+        self.end_time: datetime | None = None
         self.records: dict[str, TaskRecord] = {}
-        self.dag_snapshot: Optional[dict] = None
+        self.dag_snapshot: dict | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -162,7 +162,7 @@ class ExecutionLog:
         return all(record.status != "failed" for record in self.records.values())
 
     @property
-    def duration(self) -> Optional[float]:
+    def duration(self) -> float | None:
         if self.end_time is not None:
             return (self.end_time - self.start_time).total_seconds()
         return None
@@ -192,7 +192,7 @@ class ExecutionLog:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionLog":
+    def from_dict(cls, data: dict) -> ExecutionLog:
         log = cls(
             flow_id=data.get("flow_id"),
             job_id=data.get("job_id"),

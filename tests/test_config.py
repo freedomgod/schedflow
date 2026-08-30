@@ -1,7 +1,5 @@
 """Tests for the scheduler metadata persistence module (configs/config.py)."""
 
-import json
-import os
 import tempfile
 from pathlib import Path
 
@@ -9,21 +7,20 @@ import pytest
 
 import schedflow.configs.config as config_module
 from schedflow.configs.config import (
+    DEFAULT_META_DB,
     get_jobstore_config,
     load_executor_configs,
     load_jobstore_configs,
-    save_jobstore_config,
     remove_jobstore_config,
-    DEFAULT_META_DB,
+    save_jobstore_config,
 )
 
 
 @pytest.fixture
 def temp_meta_db(monkeypatch):
     """Redirect the metadata DB to a temporary file for isolated testing."""
-    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    tmp_path = Path(tmp.name)
-    tmp.close()
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
     monkeypatch.setattr(config_module, "DEFAULT_META_DB", tmp_path)
     yield tmp_path
     # Cleanup
@@ -65,14 +62,14 @@ class TestSaveAndLoadConfig:
 
     def test_get_single_config(self, temp_meta_db):
         save_jobstore_config("default", "sqlalchemy", {"url": "sqlite:///test.db"})
-    
+
         cfg = get_jobstore_config("default")
         assert cfg is not None
         assert cfg["type"] == "sqlalchemy"
         assert cfg["url"] == "sqlite:///test.db"
 
     def test_get_nonexistent_config(self, temp_meta_db):
-    
+
         cfg = get_jobstore_config("nonexistent")
         assert cfg is None
 
@@ -102,8 +99,9 @@ class TestDefaultMetaDB:
         assert isinstance(DEFAULT_META_DB, Path)
 
     def test_env_var_override(self, monkeypatch):
-        from schedflow.configs import settings as settings_module
         import importlib
+
+        from schedflow.configs import settings as settings_module
         monkeypatch.setattr(settings_module.settings, "SCHEDFLOW_META_DB", "custom_meta.db")
         importlib.reload(config_module)
         try:

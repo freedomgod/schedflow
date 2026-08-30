@@ -16,9 +16,8 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from schedflow.auth.security import AuthBackend, AuthResult
 from schedflow.api.schemas import APIResponse
-
+from schedflow.auth.security import AuthBackend, AuthResult
 
 PUBLIC_PATHS = {
     "/api/v1/auth/login",

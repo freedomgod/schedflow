@@ -1,6 +1,6 @@
 from datetime import datetime
-from schedflow.triggers import CronTrigger
 
+from schedflow.triggers import CronTrigger
 
 if __name__ == '__main__':
     c = CronTrigger(

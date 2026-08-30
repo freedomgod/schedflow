@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from schedflow.core.log import ExecutionLog, TaskRecord
@@ -36,16 +37,16 @@ EVENT_KINDS = frozenset(
 class SchedulerEvent:
     """A scheduler event with a string kind and optional payload."""
 
-    __slots__ = ("kind", "job_id", "run_time", "log", "record")
+    __slots__ = ("job_id", "kind", "log", "record", "run_time")
 
     def __init__(
         self,
         kind: str,
         *,
-        job_id: Optional[str] = None,
-        run_time: Optional[datetime] = None,
-        log: Optional["ExecutionLog"] = None,
-        record: Optional["TaskRecord"] = None,
+        job_id: str | None = None,
+        run_time: datetime | None = None,
+        log: ExecutionLog | None = None,
+        record: TaskRecord | None = None,
     ) -> None:
         if kind not in EVENT_KINDS:
             raise ValueError(
@@ -91,5 +92,5 @@ class EventBus:
         for callback in targets:
             try:
                 callback(event)
-            except Exception:  # noqa: BLE001 - listener errors are isolated
+            except Exception:  # noqa: BLE001, S110 - listener errors are isolated
                 pass

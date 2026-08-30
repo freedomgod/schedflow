@@ -3,24 +3,24 @@ import uuid
 from fastapi import APIRouter
 
 from schedflow.api.schemas import (
-    APIResponse,
-    LoginRequest,
-    InitSetupRequest,
-    InitStatusResponse,
-    AuthResponse,
     ApiKeyCreateRequest,
     ApiKeyCreateResponse,
     ApiKeyItem,
     ApiKeyUpdateRequest,
+    APIResponse,
+    AuthResponse,
+    InitSetupRequest,
+    InitStatusResponse,
+    LoginRequest,
 )
-from schedflow.auth.services import needs_init, setup_admin, login
 from schedflow.auth.models import (
-    generate_api_key,
     create_api_key,
+    delete_api_key,
+    generate_api_key,
     list_api_keys,
     update_api_key,
-    delete_api_key,
 )
+from schedflow.auth.services import login, needs_init, setup_admin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

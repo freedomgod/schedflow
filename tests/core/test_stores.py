@@ -1,6 +1,6 @@
 """Persistent JobStore tests (SQLAlchemy, Redis, MongoDB)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -63,7 +63,7 @@ class TestSQLAlchemyJobStore:
             sqlalchemy_store.remove("missing")
 
     def test_get_due_filters_and_sorts(self, sqlalchemy_store):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         past_a = make_job("a")
         past_a.next_run_time = now - timedelta(seconds=5)
         past_b = make_job("b")
@@ -79,7 +79,7 @@ class TestSQLAlchemyJobStore:
         assert [job.job_id for job in due] == ["a", "b"]
 
     def test_get_next_run_time(self, sqlalchemy_store):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         job = make_job("j1")
         job.next_run_time = now + timedelta(hours=3)
         sqlalchemy_store.add(job)

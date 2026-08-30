@@ -8,16 +8,16 @@ from schedflow.api.schemas import (
     ThemeRequest,
     ThemeResponse,
     VariableCreateRequest,
-    VariableUpdateRequest,
     VariableItem,
+    VariableUpdateRequest,
+)
+from schedflow.settings.models import (
+    create_variable,
+    delete_variable,
+    list_variables,
+    update_variable,
 )
 from schedflow.settings.services import get_theme, set_theme
-from schedflow.settings.models import (
-    list_variables,
-    create_variable,
-    update_variable,
-    delete_variable,
-)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

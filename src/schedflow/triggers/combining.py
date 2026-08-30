@@ -1,7 +1,4 @@
-from typing import Optional, Mapping
-from pydantic import (
-    Field, ConfigDict
-)
+from pydantic import Field
 
 from schedflow.triggers.base import (
     BaseTrigger,
@@ -9,17 +6,15 @@ from schedflow.triggers.base import (
     TriggerBaseConfigModel,
     TriggerType,
 )
-from schedflow.utils import obj_to_ref, ref_to_obj
-
 
 
 class CombiningTriggerModel(TriggerBaseConfigModel):
-    triggers: Optional[list[TriggerType]] = Field(default=None, description="触发器列表")
-    jitter: Optional[int] = Field(default=None, description="任务最多延迟执行的时间")
+    triggers: list[TriggerType] | None = Field(default=None, description="触发器列表")
+    jitter: int | None = Field(default=None, description="任务最多延迟执行的时间")
 
 
 class BaseCombiningTrigger(BaseTrigger):
-    __slots__ = ("triggers", "jitter")
+    __slots__ = ("jitter", "triggers")
     _pydantic_model_cls = CombiningTriggerModel
 
     def __init__(self, triggers=None, *, jitter=None):
@@ -39,7 +34,7 @@ class BaseCombiningTrigger(BaseTrigger):
         args = data.get("args", {})
         triggers = [Trigger.from_dict(item) for item in args.get("triggers", [])]
         return cls(triggers=triggers, jitter=args.get("jitter"))
-    
+
     def __repr__(self):
         return "<{}({}{})>".format(
             self.__class__.__name__,

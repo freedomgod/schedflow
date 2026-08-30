@@ -1,10 +1,9 @@
 """TDD tests for component management API endpoints."""
 from datetime import datetime, timedelta
-import pytest
+
 from fastapi.testclient import TestClient
 
 from schedflow.configs.config import remove_jobstore_config
-
 
 FUTURE_RUN_TIME = (datetime.now() + timedelta(days=365)).isoformat()
 
@@ -130,7 +129,7 @@ class TestGetJobstoreConfig:
     def teardown_method(self):
         try:
             remove_jobstore_config("teststore")
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup
             pass
 
 

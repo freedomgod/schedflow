@@ -1,6 +1,6 @@
 """MemoryJobStore tests."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -12,7 +12,7 @@ from schedflow.core.jobstore import (
 )
 from schedflow.core.log import ExecutionLog, TaskRecord
 from schedflow.core.workflow import Workflow
-from schedflow.triggers import DateTrigger, IntervalTrigger
+from schedflow.triggers import IntervalTrigger
 
 
 def module_fn(value: int = 1) -> int:
@@ -67,7 +67,7 @@ def test_remove_missing_raises():
 
 def test_get_due_sorted():
     store = make_store()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     job_a = make_job("a")
     job_a.next_run_time = now - timedelta(seconds=5)
     job_b = make_job("b")
@@ -85,7 +85,7 @@ def test_get_due_sorted():
 
 def test_get_all_paused_last():
     store = make_store()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     job_a = make_job("a")
     job_a.next_run_time = now + timedelta(hours=2)
     paused = make_job("paused")

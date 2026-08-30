@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 
 class TaskResult:
@@ -18,24 +18,24 @@ class TaskResult:
     """
 
     __slots__ = (
-        "succeeded",
-        "result",
+        "duration",
         "error",
         "exit_code",
-        "stdout",
+        "result",
         "stderr",
-        "duration",
+        "stdout",
+        "succeeded",
     )
 
     def __init__(
         self,
         succeeded: bool,
         result: Any = None,
-        error: Optional[str] = None,
-        exit_code: Optional[int] = None,
-        stdout: Optional[str] = None,
-        stderr: Optional[str] = None,
-        duration: Optional[float] = None,
+        error: str | None = None,
+        exit_code: int | None = None,
+        stdout: str | None = None,
+        stderr: str | None = None,
+        duration: float | None = None,
     ) -> None:
         self.succeeded = succeeded
         self.result = result
@@ -57,7 +57,7 @@ class TaskResult:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "TaskResult":
+    def from_dict(cls, data: dict) -> TaskResult:
         return cls(
             succeeded=data["succeeded"],
             result=data.get("result"),

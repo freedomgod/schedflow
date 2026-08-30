@@ -18,7 +18,6 @@ import importlib
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Optional
 
 
 class RefResolveError(LookupError):
@@ -45,7 +44,7 @@ def _load_module_file(path: Path, module_name: str):
 
 def resolve_ref(
     ref: str,
-    project_root: Optional[str | Path] = None,
+    project_root: str | Path | None = None,
 ) -> object:
     """Resolve a ``"module:object"`` reference to the target object.
 

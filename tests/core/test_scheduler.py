@@ -1,16 +1,15 @@
 """Scheduler tests (explicit API, due processing, events)."""
 
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from schedflow.core.events import SchedulerEvent
 from schedflow.core.executor import DebugExecutor
 from schedflow.core.jobstore import JobConflictError, MemoryJobStore
 from schedflow.core.scheduler import Scheduler
 from schedflow.core.workflow import Workflow
-from schedflow.triggers import DateTrigger, IntervalTrigger
+from schedflow.triggers import IntervalTrigger
 
 
 def module_fn(value: int = 1) -> int:
@@ -81,7 +80,7 @@ def test_due_job_not_dispatched_when_advance_persist_fails():
         trigger=IntervalTrigger(seconds=60),
         job_id="j1",
     )
-    run_time = datetime.now(timezone.utc) - timedelta(seconds=1)
+    run_time = datetime.now(UTC) - timedelta(seconds=1)
     job.next_run_time = run_time
 
     store = scheduler.get_jobstore("default")
@@ -93,7 +92,7 @@ def test_due_job_not_dispatched_when_advance_persist_fails():
     store.update = broken_update
     try:
         with pytest.raises(RuntimeError):
-            scheduler._run_due_job(job, datetime.now(timezone.utc))
+            scheduler._run_due_job(job, datetime.now(UTC))
         assert scheduler._executor.submitted == []
     finally:
         store.update = real_update
@@ -107,9 +106,9 @@ def test_due_job_dispatched_after_advance_persists():
         trigger=IntervalTrigger(seconds=60),
         job_id="j1",
     )
-    run_time = datetime.now(timezone.utc) - timedelta(seconds=1)
+    run_time = datetime.now(UTC) - timedelta(seconds=1)
     job.next_run_time = run_time
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     scheduler._run_due_job(job, now)
 
@@ -292,7 +291,7 @@ def test_start_processes_due_job():
 
 def test_due_job_in_the_past_fires_immediately():
     scheduler = make_scheduler()
-    past = datetime.now(timezone.utc) - timedelta(seconds=1)
+    past = datetime.now(UTC) - timedelta(seconds=1)
     scheduler.add_job(
         make_workflow(), trigger=StaticTrigger(past), job_id="j1"
     )
@@ -314,7 +313,7 @@ def test_missed_job_publishes_event():
         make_workflow(), trigger=IntervalTrigger(seconds=60), job_id="j1",
         misfire_grace_time=1,
     )
-    job.next_run_time = datetime.now(timezone.utc) - timedelta(seconds=30)
+    job.next_run_time = datetime.now(UTC) - timedelta(seconds=30)
     scheduler.start()
     try:
         deadline = time.time() + 5
@@ -331,7 +330,7 @@ def test_run_error_persists_failed_log():
     job = scheduler.add_job(make_workflow(), job_id="j1")
     scheduler._on_job_finished(
         job,
-        datetime.now(timezone.utc),
+        datetime.now(UTC),
         None,
         error=RuntimeError("boom"),
     )

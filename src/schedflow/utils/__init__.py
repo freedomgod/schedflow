@@ -1,2 +1,2 @@
 from .general_util import *
-from .logger_util import get_logger
+from .logger_util import get_logger as get_logger

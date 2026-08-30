@@ -2,15 +2,16 @@ import hashlib
 import secrets
 import time
 import uuid
+from datetime import UTC
 
-import jwt
 import bcrypt
+import jwt
 
 from schedflow.auth.models import (
     count_users,
     create_user,
-    get_user_by_username,
     get_api_key_by_hash,
+    get_user_by_username,
     update_api_key_last_used,
 )
 from schedflow.configs.config import _get_conn
@@ -105,9 +106,9 @@ def verify_api_key(plain_key: str) -> dict | None:
     if not key_record["is_active"]:
         return None
     if key_record["expires_at"]:
-        from datetime import datetime, timezone
+        from datetime import datetime
         expires = datetime.fromisoformat(key_record["expires_at"])
-        if expires < datetime.now(timezone.utc):
+        if expires < datetime.now(UTC):
             return None
     update_api_key_last_used(key_record["id"])
     return key_record

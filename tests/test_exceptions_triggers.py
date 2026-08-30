@@ -1,7 +1,5 @@
 """Tests for trigger exception types."""
 
-import pytest
-from pydantic import ValidationError
 
 from schedflow.exceptions.triggers import TriggerError, TriggerValidationError
 

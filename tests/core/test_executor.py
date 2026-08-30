@@ -2,8 +2,6 @@
 
 import time
 
-import pytest
-
 from schedflow.core.executor import DebugExecutor, ProcessPoolExecutor
 from schedflow.core.jobstore import MemoryJobStore
 from schedflow.core.scheduler import Scheduler

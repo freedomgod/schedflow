@@ -3,7 +3,7 @@
 import pickle
 
 import pytest
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from schedflow.utils.base_model import BaseModelMixin
 
@@ -27,7 +27,7 @@ class _ComplexPydanticModel(BaseModel):
 
 
 class ComplexModel(BaseModelMixin):
-    __slots__ = ("name", "value", "tags")
+    __slots__ = ("name", "tags", "value")
     _pydantic_model_cls = _ComplexPydanticModel
 
 

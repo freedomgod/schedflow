@@ -1,19 +1,13 @@
 import pickle
-import sys
 from datetime import date, datetime, timedelta
 from unittest.mock import Mock
+from zoneinfo import ZoneInfo
 
 import pytest
 import pytz
 
 from schedflow.triggers import CronTrigger, IntervalTrigger
 from schedflow.utils import localize
-
-
-if sys.version_info < (3, 9):
-    from backports.zoneinfo import ZoneInfo
-else:
-    from zoneinfo import ZoneInfo
 
 
 @pytest.fixture()
@@ -154,7 +148,7 @@ def test_jitter_produces_different_valid_results(timezone):
     now = datetime.now(timezone)
 
     results = set()
-    for _ in range(0, 100):
+    for _ in range(100):
         next_fire_time = trigger.get_next_fire_time(None, now)
         results.add(next_fire_time)
         assert timedelta(seconds=2) <= (next_fire_time - now) <= timedelta(seconds=8)
@@ -188,7 +182,7 @@ def test_jitter_dst_change(trigger_args, start_date, start_date_dst, correct_nex
     )
     correct_next_date = timezone.localize(correct_next_date, is_dst=not start_date_dst)
 
-    for _ in range(0, 100):
+    for _ in range(100):
         next_fire_time = trigger.get_next_fire_time(None, start_date + epsilon)
         assert abs(next_fire_time - correct_next_date) <= timedelta(seconds=5)
 
@@ -198,6 +192,6 @@ def test_jitter_with_end_date(timezone):
     end_date = localize(datetime(2017, 11, 12, 6, 56, 0), timezone)
     trigger = IntervalTrigger(seconds=5, jitter=5, end_date=end_date)
 
-    for _ in range(0, 100):
+    for _ in range(100):
         next_fire_time = trigger.get_next_fire_time(None, now)
         assert next_fire_time is None or next_fire_time <= end_date

@@ -6,7 +6,7 @@ import concurrent.futures
 import multiprocessing
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from schedflow.core.log import ExecutionLog
 from schedflow.core.process_worker import run_job_in_process
@@ -25,13 +25,13 @@ class Executor(ABC):
         pass
 
     @abstractmethod
-    def submit(self, job: "Job", run_time: datetime) -> None: ...
+    def submit(self, job: Job, run_time: datetime) -> None: ...
 
 
 class DebugExecutor(Executor):
     """Runs jobs synchronously in the calling thread (for tests/development)."""
 
-    def submit(self, job: "Job", run_time: datetime) -> None:
+    def submit(self, job: Job, run_time: datetime) -> None:
         try:
             log = job.run()
         except Exception as exc:  # noqa: BLE001
@@ -48,7 +48,7 @@ class ThreadPoolExecutor(Executor):
             max_workers=max(1, int(max_workers))
         )
 
-    def submit(self, job: "Job", run_time: datetime) -> None:
+    def submit(self, job: Job, run_time: datetime) -> None:
         future = self._pool.submit(job.run)
         future.add_done_callback(
             lambda completed: self._handle(job, run_time, completed)
@@ -81,7 +81,7 @@ class ProcessPoolExecutor(Executor):
             mp_context=context,
         )
 
-    def submit(self, job: "Job", run_time: datetime) -> None:
+    def submit(self, job: Job, run_time: datetime) -> None:
         project_root = (
             str(job.workflow.project_root)
             if job.workflow.project_root is not None

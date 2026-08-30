@@ -5,7 +5,6 @@ and helper functions for obtaining logger instances.
 """
 
 import logging
-import os
 
 import structlog
 

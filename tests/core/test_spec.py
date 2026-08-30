@@ -2,8 +2,8 @@
 
 import pytest
 
-from schedflow.core.spec import TaskSpec
 from schedflow.core.result import TaskResult
+from schedflow.core.spec import TaskSpec
 
 
 def dummy_func(a: int = 1, b: int = 2) -> int:

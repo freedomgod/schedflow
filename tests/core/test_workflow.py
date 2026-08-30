@@ -5,7 +5,6 @@ import time
 import pytest
 
 from schedflow.core.workflow import CycleError, Workflow
-from schedflow.core.log import TaskRecord
 
 
 def module_fn(value: int = 1) -> int:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Optional
 
 from schedflow.core.job import Job
 from schedflow.core.jobstore import (
@@ -69,7 +68,7 @@ class MongoDBJobStore(JobStore):
         if result.deleted_count == 0:
             raise JobNotFoundError(job_id)
 
-    def get(self, job_id: str) -> Optional[Job]:
+    def get(self, job_id: str) -> Job | None:
         document = self._collection.find_one({"_id": job_id})
         if document is None:
             return None
@@ -95,7 +94,7 @@ class MongoDBJobStore(JobStore):
         paused = [job for job in jobs if job.next_run_time is None]
         return scheduled + paused
 
-    def get_next_run_time(self) -> Optional[datetime]:
+    def get_next_run_time(self) -> datetime | None:
         candidates = [
             job.next_run_time
             for job in self._load_all()
@@ -119,7 +118,7 @@ class MongoDBJobStore(JobStore):
             for document in documents
         ]
 
-    def get_log(self, job_id: str, log_id: str) -> Optional[ExecutionLog]:
+    def get_log(self, job_id: str, log_id: str) -> ExecutionLog | None:
         for log in self.get_logs(job_id):
             if log.log_id == log_id:
                 return log

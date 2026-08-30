@@ -1,10 +1,8 @@
-from typing import Optional, Any, Dict, Mapping
 from datetime import datetime, timedelta, tzinfo
-from tzlocal import get_localzone
+from typing import Any, ClassVar
 
-from pydantic import (
-    BaseModel, Field, ConfigDict, model_validator, field_serializer
-)
+from pydantic import ConfigDict, Field, field_serializer, model_validator
+from tzlocal import get_localzone
 
 from schedflow.triggers.base import BaseTrigger, TriggerBaseConfigModel
 from schedflow.triggers.cron.fields import (
@@ -23,20 +21,19 @@ from schedflow.utils import (
 )
 
 
-
 class CronTriggerModel(TriggerBaseConfigModel):
-    year: Optional[int|str] = Field(default=None, description="4位数字格式的年份")
-    month: Optional[int|str] = Field(default=None, description="月份(1-12)")
-    day: Optional[int|str] = Field(default=None, description="月份中第几天(1-31)")
-    week: Optional[int|str] = Field(default=None, description="按照国际标准化组织(ISO)定义的第几周(1-53)")
-    day_of_week:  Optional[int|str] = Field(default=None, description="一周中的星期几或哪一天(0-6或 mon,tue,wed,thu,fri,sat,sun)")
-    hour: Optional[int|str] = Field(default=None, description="小时(0-23)")
-    minute: Optional[int|str] = Field(default=None, description="分钟(0-59)")
-    second: Optional[int|str] = Field(default=None, description="秒(0-59)")
-    start_date: Optional[datetime|str] = Field(default=None, description="开始计算运行时间的起始时间")
-    end_date: Optional[datetime|str] = Field(default=None, description="最后可能结束触发的运行时间")
-    timezone: Optional[tzinfo|str] = Field(default=None, description="计算所用的时区")
-    jitter: Optional[int] = Field(default=None, description="任务最多延迟执行的时间")
+    year: int | str | None = Field(default=None, description="4位数字格式的年份")
+    month: int | str | None = Field(default=None, description="月份(1-12)")
+    day: int | str | None = Field(default=None, description="月份中第几天(1-31)")
+    week: int | str | None = Field(default=None, description="按照国际标准化组织(ISO)定义的第几周(1-53)")
+    day_of_week:  int | str | None = Field(default=None, description="一周中的星期几或哪一天(0-6或 mon,tue,wed,thu,fri,sat,sun)")
+    hour: int | str | None = Field(default=None, description="小时(0-23)")
+    minute: int | str | None = Field(default=None, description="分钟(0-59)")
+    second: int | str | None = Field(default=None, description="秒(0-59)")
+    start_date: datetime | str | None = Field(default=None, description="开始计算运行时间的起始时间")
+    end_date: datetime | str | None = Field(default=None, description="最后可能结束触发的运行时间")
+    timezone: tzinfo | str | None = Field(default=None, description="计算所用的时区")
+    jitter: int | None = Field(default=None, description="任务最多延迟执行的时间")
 
     model_config = ConfigDict(
         json_schema_extra = {
@@ -59,7 +56,7 @@ class CronTriggerModel(TriggerBaseConfigModel):
 
     @model_validator(mode='before')
     @classmethod
-    def convert_string_to_datetime(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def convert_string_to_datetime(cls, data: dict[str, Any]) -> dict[str, Any]:
         """将字符串日期转换为 datetime 对象"""
         timezone = data.get('timezone')
         start_date = data.get('start_date')
@@ -72,10 +69,10 @@ class CronTriggerModel(TriggerBaseConfigModel):
             data['timezone'] = astimezone(end_date.tzinfo)
         else:
             data['timezone'] = get_localzone()
-        
+
         data['start_date'] = convert_to_datetime(start_date, data['timezone'])
         data['end_date'] = convert_to_datetime(end_date, data['timezone'])
-        
+
         return data
 
 
@@ -100,7 +97,7 @@ class CronTrigger(BaseTrigger):
 
     .. note:: The first weekday is always **monday**.
     """
-    
+
     FIELD_NAMES = (
         "year",
         "month",
@@ -111,7 +108,7 @@ class CronTrigger(BaseTrigger):
         "minute",
         "second",
     )
-    FIELDS_MAP = {
+    FIELDS_MAP: ClassVar[dict[str, type[BaseField]]] = {
         "year": BaseField,
         "month": MonthField,
         "week": WeekField,
@@ -122,7 +119,7 @@ class CronTrigger(BaseTrigger):
         "second": BaseField,
     }
 
-    __slots__ = ("timezone", "start_date", "end_date", "_fields", "jitter")
+    __slots__ = ("_fields", "end_date", "jitter", "start_date", "timezone")
     _trigger_type = "cron"
     _pydantic_model_cls = CronTriggerModel
 
@@ -157,7 +154,7 @@ class CronTrigger(BaseTrigger):
             timezone=timezone,
             jitter=jitter,
         )
-        
+
         values = self._model.model_dump(include=self.FIELD_NAMES, exclude_none=True)
         self._fields: list[BaseField] = []
         assign_defaults = False

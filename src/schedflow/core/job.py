@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from schedflow.core.log import ExecutionLog
 from schedflow.core.workflow import Workflow
@@ -34,14 +33,14 @@ class Job:
     def __init__(
         self,
         workflow: Workflow | dict,
-        trigger: Optional[Trigger] = None,
+        trigger: Trigger | None = None,
         *,
-        job_id: Optional[str] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        job_id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
         executor_alias: str = "default",
         jobstore_alias: str = "default",
-        misfire_grace_time: Optional[int] = None,
+        misfire_grace_time: int | None = None,
         coalesce: bool = True,
         max_instances: int = 1,
     ) -> None:
@@ -66,7 +65,7 @@ class Job:
         self.coalesce = bool(coalesce)
         self.max_instances = max(1, int(max_instances))
         self.status: str = "running"
-        self.next_run_time: Optional[datetime] = None
+        self.next_run_time: datetime | None = None
         if trigger is not None:
             self.next_run_time = trigger.get_next_fire_time(
                 None, datetime.now().astimezone()
@@ -99,7 +98,7 @@ class Job:
         }
 
     @classmethod
-    def from_dict(cls, data: dict, *, project_root: Optional[Path | str] = None) -> "Job":
+    def from_dict(cls, data: dict, *, project_root: Path | str | None = None) -> Job:
         workflow = Workflow.from_dict(data["workflow"])
         if project_root is not None:
             workflow.project_root = Path(project_root)

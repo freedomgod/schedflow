@@ -4,9 +4,9 @@ import os
 import shutil
 import subprocess
 import sys
-from typing import Optional
 
 from schedflow.core.result import TaskResult
+
 from .base import BaseRunner, RunContext
 
 
@@ -49,7 +49,7 @@ def _find_shell():
 
 
 class BashRunner(BaseRunner):
-    def run(self, spec, *, context: Optional[RunContext] = None, **kwargs) -> TaskResult:
+    def run(self, spec, *, context: RunContext | None = None, **kwargs) -> TaskResult:
         context = context or RunContext()
         shell = _find_shell()
 
@@ -76,6 +76,7 @@ class BashRunner(BaseRunner):
                 timeout=timeout,
                 env=env,
                 cwd=cwd,
+                check=False,
             )
             return TaskResult(
                 succeeded=completed.returncode == 0,

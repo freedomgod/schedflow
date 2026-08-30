@@ -1,13 +1,13 @@
 """Runner interface and execution context."""
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from schedflow.core.result import TaskResult
 
-from schedflow.core.result import TaskResult  # noqa: E402  (re-export)
 from schedflow.core.context import RunContext
+from schedflow.core.result import TaskResult
 
 
 class BaseRunner(ABC):
@@ -20,7 +20,7 @@ class BaseRunner(ABC):
     """
 
     @abstractmethod
-    def run(self, spec, *, context: Optional[RunContext] = None, **kwargs) -> "TaskResult":
+    def run(self, spec, *, context: RunContext | None = None, **kwargs) -> "TaskResult":
         """Execute a task described by ``spec``.
 
         Args:

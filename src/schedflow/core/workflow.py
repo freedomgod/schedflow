@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import concurrent.futures
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 import networkx as nx
 
-from schedflow.core.log import ExecutionLog, TaskRecord
 from schedflow.core.context import RunContext
-from schedflow.core.result import TaskResult
+from schedflow.core.log import ExecutionLog, TaskRecord
 from schedflow.core.resolve import resolve_ref
+from schedflow.core.result import TaskResult
 from schedflow.core.spec import TaskSpec
 
 
@@ -20,16 +20,16 @@ class CycleError(Exception):
 
 
 class _Node:
-    __slots__ = ("spec", "name", "description", "retries", "on_success", "on_failure")
+    __slots__ = ("description", "name", "on_failure", "on_success", "retries", "spec")
 
     def __init__(
         self,
         spec: TaskSpec,
-        name: Optional[str],
-        description: Optional[str],
+        name: str | None,
+        description: str | None,
         retries: int,
-        on_success: Optional[TaskSpec],
-        on_failure: Optional[TaskSpec],
+        on_success: TaskSpec | None,
+        on_failure: TaskSpec | None,
     ) -> None:
         self.spec = spec
         self.name = name
@@ -40,15 +40,15 @@ class _Node:
 
 
 class _Edge:
-    __slots__ = ("source", "target", "condition", "name", "description")
+    __slots__ = ("condition", "description", "name", "source", "target")
 
     def __init__(
         self,
         source: str,
         target: str,
-        condition: Optional[TaskSpec],
-        name: Optional[str],
-        description: Optional[str],
+        condition: TaskSpec | None,
+        name: str | None,
+        description: str | None,
     ) -> None:
         self.source = source
         self.target = target
@@ -57,7 +57,7 @@ class _Edge:
         self.description = description
 
 
-def _to_callable_spec(value) -> Optional[TaskSpec]:
+def _to_callable_spec(value) -> TaskSpec | None:
     """Normalize a callback/condition to a python_callable TaskSpec (or None)."""
     if value is None:
         return None
@@ -72,9 +72,9 @@ class Workflow:
 
     def __init__(
         self,
-        flow_id: Optional[str] = None,
+        flow_id: str | None = None,
         *,
-        project_root: Optional[str | Path] = None,
+        project_root: str | Path | None = None,
     ) -> None:
         self.flow_id = flow_id
         self.project_root = (
@@ -88,20 +88,20 @@ class Workflow:
     def add_task(
         self,
         node_id: str,
-        func: Optional[Callable | str] = None,
+        func: Callable | str | None = None,
         *,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
         type: str = "python_callable",
-        command: Optional[str] = None,
-        script_path: Optional[str] = None,
-        script: Optional[str] = None,
-        args: Optional[list] = None,
-        kwargs: Optional[dict] = None,
+        command: str | None = None,
+        script_path: str | None = None,
+        script: str | None = None,
+        args: list | None = None,
+        kwargs: dict | None = None,
         retries: int = 1,
-        timeout: Optional[float] = None,
-        on_success: Optional[Callable | str | TaskSpec] = None,
-        on_failure: Optional[Callable | str | TaskSpec] = None,
+        timeout: float | None = None,
+        on_success: Callable | str | TaskSpec | None = None,
+        on_failure: Callable | str | TaskSpec | None = None,
     ) -> str:
         """Add a task node.
 
@@ -142,9 +142,9 @@ class Workflow:
         source: str,
         target: str,
         *,
-        condition: Optional[Callable | str | TaskSpec] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        condition: Callable | str | TaskSpec | None = None,
+        name: str | None = None,
+        description: str | None = None,
     ) -> None:
         """Add a dependency edge (with cycle detection).
 
@@ -183,7 +183,7 @@ class Workflow:
         *,
         max_workers: int = 3,
         executor: str = "thread",
-        inputs: Optional[dict] = None,
+        inputs: dict | None = None,
     ) -> ExecutionLog:
         """Execute the workflow directly (without a scheduler).
 
@@ -422,7 +422,7 @@ class Workflow:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Workflow":
+    def from_dict(cls, data: dict) -> Workflow:
         wf = cls(
             flow_id=data.get("flow_id"),
             project_root=data.get("project_root"),
@@ -462,7 +462,7 @@ class Workflow:
         )
 
 
-def _spec_from_json(value) -> Optional[TaskSpec]:
+def _spec_from_json(value) -> TaskSpec | None:
     if value is None:
         return None
     return TaskSpec.from_dict(value)

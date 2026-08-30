@@ -1,18 +1,13 @@
 import pickle
-import sys
 from datetime import datetime, timedelta
 from unittest.mock import Mock
+from zoneinfo import ZoneInfo
 
 import pytest
 import pytz
 
 from schedflow.triggers import CronTrigger
 from schedflow.utils import localize
-
-if sys.version_info < (3, 9):
-    from backports.zoneinfo import ZoneInfo
-else:
-    from zoneinfo import ZoneInfo
 
 
 def test_cron_trigger_1(timezone):
@@ -201,7 +196,8 @@ def test_cron_extra_coverage(timezone):
 
 
 def test_cron_faulty_expr(timezone):
-    pytest.raises(ValueError, CronTrigger, year="2009-fault", timezone=timezone)
+    with pytest.raises(ValueError):
+        CronTrigger(year="2009-fault", timezone=timezone)
 
 
 def test_cron_increment_weekday(timezone):
@@ -347,7 +343,7 @@ def test_jitter_produces_differrent_valid_results(timezone):
     now = localize(datetime(2017, 11, 12, 6, 55, 30), timezone)
 
     results = set()
-    for _ in range(0, 100):
+    for _ in range(100):
         next_fire_time = trigger.get_next_fire_time(None, now)
         results.add(next_fire_time)
         assert timedelta(seconds=25) <= (next_fire_time - now) <= timedelta(seconds=35)
@@ -361,7 +357,7 @@ def test_jitter_with_timezone(timezone):
     trigger = CronTrigger(hour=11, minute="*/5", timezone=est, jitter=5)
     start_date = cst.localize(datetime(2009, 9, 26, 10, 16))
     correct_next_date = est.localize(datetime(2009, 9, 26, 11, 20))
-    for _ in range(0, 100):
+    for _ in range(100):
         assert abs(
             trigger.get_next_fire_time(None, start_date) - correct_next_date
         ) <= timedelta(seconds=5)
@@ -398,7 +394,7 @@ def test_jitter_dst_change(trigger_args, start_date, fold, correct_next_date):
     start_date = start_date.replace(tzinfo=timezone)
     correct_next_date = correct_next_date.replace(tzinfo=timezone)
 
-    for _ in range(0, 100):
+    for _ in range(100):
         next_fire_time = trigger.get_next_fire_time(None, start_date)
         assert abs(next_fire_time - correct_next_date) <= timedelta(seconds=5)
 
@@ -408,7 +404,7 @@ def test_jitter_with_end_date(timezone):
     end_date = localize(datetime(2017, 11, 12, 6, 56, 0), timezone)
     trigger = CronTrigger(minute="*", jitter=5, end_date=end_date)
 
-    for _ in range(0, 100):
+    for _ in range(100):
         next_fire_time = trigger.get_next_fire_time(None, now)
         assert next_fire_time is None or next_fire_time <= end_date
 
@@ -417,24 +413,32 @@ def test_jitter_with_end_date(timezone):
     "values, expected",
     [
         (
-            dict(day="*/31"),
-            r"Error validating expression '\*/31': the step value \(31\) is higher "
-            r"than the total range of the expression \(30\)",
+            {"day": "*/31"},
+            (
+                r"Error validating expression '\*/31': the step value \(31\) is higher "
+                r"than the total range of the expression \(30\)"
+            ),
         ),
         (
-            dict(day="4-6/3"),
-            r"Error validating expression '4-6/3': the step value \(3\) is higher "
-            r"than the total range of the expression \(2\)",
+            {"day": "4-6/3"},
+            (
+                r"Error validating expression '4-6/3': the step value \(3\) is higher "
+                r"than the total range of the expression \(2\)"
+            ),
         ),
         (
-            dict(hour="0-24"),
-            r"Error validating expression '0-24': the last value \(24\) is higher "
-            r"than the maximum value \(23\)",
+            {"hour": "0-24"},
+            (
+                r"Error validating expression '0-24': the last value \(24\) is higher "
+                r"than the maximum value \(23\)"
+            ),
         ),
         (
-            dict(day="0-3"),
-            r"Error validating expression '0-3': the first value \(0\) is lower "
-            r"than the minimum value \(1\)",
+            {"day": "0-3"},
+            (
+                r"Error validating expression '0-3': the first value \(0\) is lower "
+                r"than the minimum value \(1\)"
+            ),
         ),
     ],
     ids=[
@@ -445,7 +449,8 @@ def test_jitter_with_end_date(timezone):
     ],
 )
 def test_invalid_ranges(values, expected):
-    pytest.raises(ValueError, CronTrigger, **values).match(expected)
+    with pytest.raises(ValueError, match=expected):
+        CronTrigger(**values)
 
 
 @pytest.mark.parametrize(
@@ -453,18 +458,24 @@ def test_invalid_ranges(values, expected):
     [
         (
             "* * * * *",
-            "<CronTrigger (month='*', day='*', day_of_week='*', hour='*', minute='*', "
-            "timezone='Europe/Berlin')>",
+            (
+                "<CronTrigger (month='*', day='*', day_of_week='*', hour='*', minute='*', "
+                "timezone='Europe/Berlin')>"
+            ),
         ),
         (
             "0-14 * 14-28 jul fri",
-            "<CronTrigger (month='jul', day='14-28', day_of_week='fri', hour='*', minute='0-14', "
-            "timezone='Europe/Berlin')>",
+            (
+                "<CronTrigger (month='jul', day='14-28', day_of_week='fri', hour='*', minute='0-14', "
+                "timezone='Europe/Berlin')>"
+            ),
         ),
         (
             " 0-14   * 14-28   jul       fri",
-            "<CronTrigger (month='jul', day='14-28', day_of_week='fri', hour='*', minute='0-14', "
-            "timezone='Europe/Berlin')>",
+            (
+                "<CronTrigger (month='jul', day='14-28', day_of_week='fri', hour='*', minute='0-14', "
+                "timezone='Europe/Berlin')>"
+            ),
         ),
     ],
     ids=["always", "assorted", "multiple_spaces_in_format"],

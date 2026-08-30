@@ -1,6 +1,6 @@
 """TDD tests for auth middleware."""
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 

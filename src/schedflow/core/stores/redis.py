@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from schedflow.core.job import Job
 from schedflow.core.jobstore import (
@@ -88,7 +87,7 @@ class RedisJobStore(JobStore):
         pipeline.zrem(self._run_times_key, job_id)
         pipeline.execute()
 
-    def get(self, job_id: str) -> Optional[Job]:
+    def get(self, job_id: str) -> Job | None:
         raw = self._redis.hget(self._jobs_key, job_id)
         return Job.from_dict(json.loads(raw)) if raw else None
 
@@ -108,13 +107,13 @@ class RedisJobStore(JobStore):
         paused = [job for job in jobs if job.next_run_time is None]
         return scheduled + paused
 
-    def get_next_run_time(self) -> Optional[datetime]:
+    def get_next_run_time(self) -> datetime | None:
         items = self._redis.zrange(
             self._run_times_key, 0, 0, withscores=True
         )
         if not items:
             return None
-        return datetime.fromtimestamp(items[0][1], tz=timezone.utc)
+        return datetime.fromtimestamp(items[0][1], tz=UTC)
 
     def add_log(self, job_id: str, log: ExecutionLog) -> None:
         self._redis.rpush(
@@ -126,7 +125,7 @@ class RedisJobStore(JobStore):
         raw_rows = self._redis.lrange(f"{self._logs_key}:{job_id}", 0, -1)
         return [ExecutionLog.from_dict(json.loads(raw)) for raw in raw_rows]
 
-    def get_log(self, job_id: str, log_id: str) -> Optional[ExecutionLog]:
+    def get_log(self, job_id: str, log_id: str) -> ExecutionLog | None:
         for log in self.get_logs(job_id):
             if log.log_id == log_id:
                 return log

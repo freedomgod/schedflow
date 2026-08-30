@@ -7,10 +7,10 @@ current process.
 
 import concurrent.futures
 import inspect
-from typing import Optional
 
 from schedflow.core.resolve import resolve_ref
 from schedflow.core.result import TaskResult
+
 from .base import BaseRunner, RunContext
 
 
@@ -32,7 +32,7 @@ def _filter_kwargs(func, kwargs: dict) -> dict:
 
 
 class PythonCallableRunner(BaseRunner):
-    def run(self, spec, *, context: Optional[RunContext] = None, **kwargs) -> TaskResult:
+    def run(self, spec, *, context: RunContext | None = None, **kwargs) -> TaskResult:
         context = context or RunContext()
         try:
             func = spec.func

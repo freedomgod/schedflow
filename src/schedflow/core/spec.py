@@ -18,7 +18,8 @@ Supported execution types:
 
 from __future__ import annotations
 
-from typing import Any, Callable, Literal, Optional
+from collections.abc import Callable
+from typing import Literal
 
 from schedflow.utils import obj_to_ref
 
@@ -31,36 +32,36 @@ class TaskSpec:
     """A serializable description of what one workflow node executes."""
 
     __slots__ = (
-        "type",
-        "ref",
-        "func",
-        "command",
-        "script_path",
-        "script",
         "args",
+        "command",
+        "func",
         "kwargs",
+        "ref",
+        "script",
+        "script_path",
         "timeout",
+        "type",
     )
 
     def __init__(
         self,
-        func: Optional[Callable | str] = None,
+        func: Callable | str | None = None,
         *,
         type: str = "python_callable",
-        command: Optional[str] = None,
-        script_path: Optional[str] = None,
-        script: Optional[str] = None,
-        args: Optional[list] = None,
-        kwargs: Optional[dict] = None,
-        timeout: Optional[float] = None,
+        command: str | None = None,
+        script_path: str | None = None,
+        script: str | None = None,
+        args: list | None = None,
+        kwargs: dict | None = None,
+        timeout: float | None = None,
     ) -> None:
         if type not in _VALID_TYPES:
             raise ValueError(
                 f"Unknown task type {type!r}; expected one of {_VALID_TYPES}"
             )
         self.type = type
-        self.ref: Optional[str] = None
-        self.func: Optional[Callable] = None
+        self.ref: str | None = None
+        self.func: Callable | None = None
         self.command = command
         self.script_path = script_path
         self.script = script
@@ -114,7 +115,7 @@ class TaskSpec:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "TaskSpec":
+    def from_dict(cls, data: dict) -> TaskSpec:
         """Rebuild a spec from JSON without resolving any reference."""
         return cls(
             func=data.get("ref"),
@@ -130,7 +131,7 @@ class TaskSpec:
     def __repr__(self) -> str:
         return f"<TaskSpec type={self.type!r} ref={self.ref!r}>"
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, TaskSpec):
             return NotImplemented
         return self.to_dict() == other.to_dict()

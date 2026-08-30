@@ -1,34 +1,26 @@
 import pickle
-import sys
-from datetime import date, datetime
-from datetime import timezone as timezone_type
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from schedflow.triggers.calendarinterval import CalendarIntervalTrigger
 from schedflow.utils import astimezone, localize
 
-if sys.version_info < (3, 9):
-    from backports.zoneinfo import ZoneInfo
-else:
-    from zoneinfo import ZoneInfo
-
 
 def test_bad_interval(timezone: ZoneInfo) -> None:
-    exc = pytest.raises(ValueError, CalendarIntervalTrigger, timezone=timezone)
-    exc.match("interval must be at least 1 day long")
+    with pytest.raises(ValueError, match="interval must be at least 1 day long"):
+        CalendarIntervalTrigger(timezone=timezone)
 
 
 def test_bad_start_end_dates(timezone: ZoneInfo) -> None:
-    exc = pytest.raises(
-        ValueError,
-        CalendarIntervalTrigger,
-        days=1,
-        start_date=date(2016, 3, 4),
-        end_date=date(2016, 3, 3),
-        timezone=timezone,
-    )
-    exc.match("end_date cannot be earlier than start_date")
+    with pytest.raises(ValueError, match="end_date cannot be earlier than start_date"):
+        CalendarIntervalTrigger(
+            days=1,
+            start_date=date(2016, 3, 4),
+            end_date=date(2016, 3, 3),
+            timezone=timezone,
+        )
 
 
 def test_end_date(timezone: ZoneInfo) -> None:
@@ -115,9 +107,9 @@ def test_repr(timezone: ZoneInfo) -> None:
 
 def test_utc_timezone() -> None:
     trigger = CalendarIntervalTrigger(
-        days=1, hour=1, start_date=date(2016, 3, 31), timezone=timezone_type.utc
+        days=1, hour=1, start_date=date(2016, 3, 31), timezone=UTC
     )
-    now = datetime.now(timezone_type.utc)
+    now = datetime.now(UTC)
     assert trigger.get_next_fire_time(None, now) == datetime(
-        2016, 3, 31, 1, tzinfo=timezone_type.utc
+        2016, 3, 31, 1, tzinfo=UTC
     )

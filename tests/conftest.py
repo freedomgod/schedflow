@@ -127,7 +127,7 @@ def freeze_time(monkeypatch, timezone):
         def set_increment(self, delta):
             self.increment = delta
 
-    freezer = TimeFreezer(localize(datetime(2011, 4, 3, 18, 40), timezone))  # noqa: DTZ001
+    freezer = TimeFreezer(localize(datetime(2011, 4, 3, 18, 40), timezone))
     fake_datetime = Mock(datetime, now=freezer.get)
     monkeypatch.setattr("schedflow.triggers.interval.datetime", fake_datetime)
     monkeypatch.setattr("schedflow.triggers.date.datetime", fake_datetime)

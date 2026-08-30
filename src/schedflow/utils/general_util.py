@@ -6,40 +6,39 @@ for generating prefixed unique identifiers.
 """
 
 __all__ = (
-    "asint",
+    "CustomTypeID",
     "asbool",
+    "asint",
     "astimezone",
+    "check_callable_args",
     "convert_to_date",
     "convert_to_datetime",
-    "datetime_to_string",
-    "datetime_to_utc_timestamp",
-    "utc_timestamp_to_datetime",
     "datetime_ceil",
     "datetime_repr",
-    "timezone_repr",
+    "datetime_to_string",
+    "datetime_to_utc_timestamp",
+    "for_test_callable",
     "get_callable_name",
+    "iscoroutinefunction_partial",
+    "localize",
+    "maybe_ref",
+    "normalize",
     "obj_to_ref",
     "ref_to_obj",
-    "maybe_ref",
-    "check_callable_args",
-    "normalize",
-    "localize",
-    "undefined",
-    "CustomTypeID",
-    "for_test_callable",
-    "iscoroutinefunction_partial",
     "timedelta_seconds",
+    "timezone_repr",
+    "undefined",
+    "utc_timestamp_to_datetime",
 )
 
+import importlib
+import pathlib
 import re
 import sys
-import pathlib
-import importlib
 from calendar import timegm
-from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from datetime import UTC, date, datetime, time, timedelta, timezone, tzinfo
 from functools import partial
 from inspect import isbuiltin, isclass, isfunction, ismethod, signature
-from typing import Callable, Union, Optional
 
 from typeid import TypeID
 
@@ -48,10 +47,7 @@ if sys.version_info < (3, 14):
 else:
     from inspect import iscoroutinefunction
 
-if sys.version_info < (3, 9):
-    from backports.zoneinfo import ZoneInfo
-else:
-    from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo
 
 
 class _Undefined:
@@ -111,7 +107,7 @@ def astimezone(obj):
     """
     if isinstance(obj, str):
         if obj == "UTC":
-            return timezone.utc
+            return UTC
 
         return ZoneInfo(obj)
 
@@ -192,7 +188,7 @@ def convert_to_datetime_old(input, tz, arg_name):
         values = m.groupdict()
         tzname = values.pop("timezone")
         if tzname == "Z":
-            tz = timezone.utc
+            tz = UTC
         elif tzname:
             hours, minutes = (int(x) for x in tzname[1:].split(":"))
             sign = 1 if tzname[0] == "+" else -1
@@ -222,9 +218,9 @@ def convert_to_date(obj: str | date) -> date:
 
 
 def convert_to_datetime(
-    input: Union[str, datetime, date, None],
-    tz: Optional[tzinfo] = None
-) -> Optional[datetime]:
+    input: str | datetime | date | None,
+    tz: tzinfo | None = None
+) -> datetime | None:
     """
     Convert the input to a timezone-aware datetime object.
 
@@ -282,7 +278,7 @@ def convert_to_datetime(
             values = m.groupdict()
             tzname = values.pop("timezone")
             if tzname == "Z":
-                tz = timezone.utc
+                tz = UTC
             elif tzname:
                 hours, minutes = (int(x) for x in tzname[1:].split(":"))
                 sign = 1 if tzname[0] == "+" else -1
@@ -308,7 +304,7 @@ def convert_to_datetime(
     return dt
 
 
-def datetime_to_string(dt: Optional[datetime]) -> Optional[str]:
+def datetime_to_string(dt: datetime | None) -> str | None:
     """
     Convert a datetime object to an ISO 8601 formatted string.
 
@@ -329,14 +325,14 @@ def datetime_to_string(dt: Optional[datetime]) -> Optional[str]:
     """
     if dt is None:
         return None
-    
+
     # Base ISO format
     iso_str = dt.isoformat()
 
     # Handle UTC timezone shorthand (Z)
-    if dt.tzinfo == timezone.utc:
+    if dt.tzinfo == UTC:
         iso_str = iso_str.replace("+00:00", "Z")
-    
+
     return iso_str
 
 
@@ -361,7 +357,7 @@ def utc_timestamp_to_datetime(timestamp):
 
     """
     if timestamp is not None:
-        return datetime.fromtimestamp(timestamp, timezone.utc)
+        return datetime.fromtimestamp(timestamp, UTC)
 
 
 def timedelta_seconds(delta):
@@ -413,7 +409,7 @@ def get_callable_name(func):
         return f"{cls.__qualname__}.{func.__name__}"
     elif isclass(func) or isfunction(func) or isbuiltin(func):
         return func.__qualname__
-    elif hasattr(func, "__call__") and callable(func.__call__):
+    elif callable(func):
         # instance of a class with a __call__ method
         return type(func).__qualname__
 
@@ -433,7 +429,7 @@ def obj_to_ref(obj):
 
     """
     if isinstance(obj, partial):
-        raise ValueError("Cannot create a reference to a partial()")
+        raise ValueError("Cannot create a reference to a partial()")  # noqa: TRY004 - public API raises ValueError
 
     name = get_callable_name(obj)
     if "<lambda>" in name:
@@ -520,14 +516,14 @@ def ref_to_obj(ref: str, is_reload: bool = False):
         else:
             obj = __import__(modulename, fromlist=[rest])
     except ImportError:
-        raise LookupError('Error resolving reference %s: could not import module' % ref)
+        raise LookupError(f"Error resolving reference {ref}: could not import module")
 
     try:
         for name in rest.split('.'):
             obj = getattr(obj, name)
         return obj
-    except Exception:
-        raise LookupError('Error resolving reference %s: error looking up object' % ref)
+    except Exception:  # noqa: BLE001 - wrap any lookup failure
+        raise LookupError(f"Error resolving reference {ref}: error looking up object")
 
 
 def maybe_ref(ref):
@@ -663,7 +659,7 @@ class CustomTypeID(TypeID):
     TypeID : TypeID
         The base TypeID class that this class extends.
     """
-    def __init__(self, prefix: str = None, suffix: str = None):
+    def __init__(self, prefix: str | None = None, suffix: str | None = None):
         """
         Initializes a new instance of the CustomTypeID class.
 
@@ -679,7 +675,7 @@ class CustomTypeID(TypeID):
         super().__init__(prefix=prefix, suffix=suffix)
 
     @classmethod
-    def full_str(cls, prefix: str = None, suffix: str = None) -> str:
+    def full_str(cls, prefix: str | None = None, suffix: str | None = None) -> str:
         """
         Returns the full string representation of the TypeID.
 
@@ -698,9 +694,9 @@ class CustomTypeID(TypeID):
             The full string representation of the TypeID.
         """
         return cls(prefix=prefix, suffix=suffix).__str__()
-    
+
     @classmethod
-    def partial_prefix(cls, prefix: str = None) -> partial:
+    def partial_prefix(cls, prefix: str | None = None) -> partial:
         """
         Returns a partial function that generates a string representation of the TypeID with the given prefix.
 
@@ -721,7 +717,7 @@ class CustomTypeID(TypeID):
         return f"<class CustomTypeID({self.__str__()})>"
 
 
-def for_test_callable(random_value: int = None, threshold: int = 60, wait: int = 1, **kwargs):
+def for_test_callable(random_value: int | None = None, threshold: int = 60, wait: int = 1, **kwargs):
     """A callable function node used for testing."""
     import random
     from time import sleep
@@ -746,9 +742,7 @@ def for_test_edge_condition(exec_log) -> bool:
     """Check the boundary condition for a test node."""
     res = exec_log.result
     print(f"for_test_edge_condition: {exec_log=}, {res=}")
-    if res['random_value'] < 55:
-        return False
-    return True
+    return res['random_value'] >= 55
 
 
 def for_test_callable_done(retval=None, exc_info=None, **kwargs):

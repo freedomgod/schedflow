@@ -32,7 +32,7 @@ async def _next_run_times_stream(scheduler: Scheduler):
             await asyncio.sleep(5)
         except asyncio.CancelledError:
             break
-        except Exception:
+        except Exception:  # noqa: BLE001 - any error ends the stream
             break
 
 
@@ -88,7 +88,7 @@ async def stream_next_run_time(
                 await asyncio.sleep(5)
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception:  # noqa: BLE001 - any error ends the stream
                 break
 
     return _streaming_response(event_stream())

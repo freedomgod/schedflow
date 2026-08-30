@@ -1,13 +1,13 @@
 """Fields represent CronTrigger options which map to :class:`~datetime.datetime` fields."""
 
 __all__ = (
-    "MIN_VALUES",
-    "MAX_VALUES",
     "DEFAULT_VALUES",
+    "MAX_VALUES",
+    "MIN_VALUES",
     "BaseField",
-    "WeekField",
     "DayOfMonthField",
     "DayOfWeekField",
+    "WeekField",
 )
 
 import re
@@ -57,7 +57,7 @@ SEPARATOR = re.compile(" *, *")
 
 class BaseField:
     REAL = True
-    COMPILERS = [AllExpression, RangeExpression]
+    COMPILERS = (AllExpression, RangeExpression)
 
     def __init__(self, name, exprs, is_default=False):
         self.name = name
@@ -128,10 +128,11 @@ class WeekField(BaseField):
 
 
 class DayOfMonthField(BaseField):
-    COMPILERS = BaseField.COMPILERS + [
+    COMPILERS = (
+        *BaseField.COMPILERS,
         WeekdayPositionExpression,
         LastDayOfMonthExpression,
-    ]
+    )
 
     def get_max(self, dateval):
         return monthrange(dateval.year, dateval.month)[1]
@@ -139,11 +140,11 @@ class DayOfMonthField(BaseField):
 
 class DayOfWeekField(BaseField):
     REAL = False
-    COMPILERS = BaseField.COMPILERS + [WeekdayRangeExpression]
+    COMPILERS = (*BaseField.COMPILERS, WeekdayRangeExpression)
 
     def get_value(self, dateval):
         return dateval.weekday()
 
 
 class MonthField(BaseField):
-    COMPILERS = BaseField.COMPILERS + [MonthRangeExpression]
+    COMPILERS = (*BaseField.COMPILERS, MonthRangeExpression)

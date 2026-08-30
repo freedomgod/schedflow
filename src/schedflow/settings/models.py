@@ -1,7 +1,6 @@
-import json
-from datetime import datetime, timezone
-from schedflow.configs.config import _get_conn
+from datetime import UTC, datetime
 
+from schedflow.configs.config import _get_conn
 
 # ── System Settings ───────────────────────────────────
 
@@ -19,7 +18,7 @@ def get_setting(key: str) -> str | None:
 def set_setting(key: str, value: str) -> None:
     conn = _get_conn()
     try:
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
             "INSERT OR REPLACE INTO system_settings (key, value, updated_at) "
             "VALUES (?, ?, ?)",
@@ -59,7 +58,7 @@ def get_variable(var_id: str) -> dict | None:
 def create_variable(var_id: str, name: str, value: str, description: str | None) -> dict:
     conn = _get_conn()
     try:
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
             "INSERT INTO variables (id, name, value, description, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -76,10 +75,10 @@ def update_variable(var_id: str, **fields) -> dict | None:
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
         return get_variable(var_id)
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
     updates["updated_at"] = now
     set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [var_id]
+    values = [*updates.values(), var_id]
     conn = _get_conn()
     try:
         conn.execute(f"UPDATE variables SET {set_clause} WHERE id = ?", values)

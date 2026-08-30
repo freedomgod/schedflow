@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from schedflow.configs.settings import settings
 
@@ -61,7 +61,7 @@ def generate_api_key() -> tuple[str, str, str]:
 def create_api_key(key_id: str, name: str, key_hash: str, key_prefix: str) -> None:
     conn = _get_conn()
     try:
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
             "INSERT INTO api_keys (id, name, key_hash, key_prefix, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -101,7 +101,7 @@ def update_api_key(key_id: str, **fields) -> None:
     if not updates:
         return
     set_clause = ", ".join(f"{k} = ?" for k in updates)
-    values = list(updates.values()) + [key_id]
+    values = [*updates.values(), key_id]
     conn = _get_conn()
     try:
         conn.execute(f"UPDATE api_keys SET {set_clause} WHERE id = ?", values)
@@ -113,7 +113,7 @@ def update_api_key(key_id: str, **fields) -> None:
 def update_api_key_last_used(key_id: str) -> None:
     conn = _get_conn()
     try:
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
             "UPDATE api_keys SET last_used_at = ? WHERE id = ?", (now, key_id)
         )

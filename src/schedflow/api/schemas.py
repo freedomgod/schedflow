@@ -19,36 +19,36 @@ Models:
         JobstoreMigrateResponse — Jobstore and executor configuration models.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel, field_validator
 
 
 class APIResponse(BaseModel):
     code: int = 0
-    data: Optional[Any] = None
+    data: Any | None = None
     message: str = "ok"
 
 
 class RescheduleRequest(BaseModel):
     trigger: str
-    trigger_args: Optional[Dict[str, Any]] = None
+    trigger_args: dict[str, Any] | None = None
 
 
 class JobstoreConfigureRequest(BaseModel):
     type: str
-    config: Dict[str, Any] = {}
+    config: dict[str, Any] = {}
 
 
 class ExecutorConfigureRequest(BaseModel):
     type: str
-    config: Dict[str, Any] = {}
+    config: dict[str, Any] = {}
 
 
 class ExecutorUpdateResponse(BaseModel):
     alias: str
     plugin_type: str
-    config: Dict[str, Any]
+    config: dict[str, Any]
     type_changed: bool
     message: str
 
@@ -56,7 +56,7 @@ class ExecutorUpdateResponse(BaseModel):
 class JobstoreUpdateResponse(BaseModel):
     alias: str
     plugin_type: str
-    config: Dict[str, Any]
+    config: dict[str, Any]
     needs_migration: bool
     affected_jobs_count: int
     old_plugin_type: str
@@ -67,7 +67,7 @@ class JobstoreMigrateResponse(BaseModel):
     alias: str
     migrated_count: int
     message: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # ── Auth ──────────────────────────────────────────────
@@ -118,14 +118,14 @@ class ApiKeyItem(BaseModel):
     name: str
     key_prefix: str
     is_active: bool
-    last_used_at: Optional[str] = None
+    last_used_at: str | None = None
     created_at: str
-    expires_at: Optional[str] = None
+    expires_at: str | None = None
 
 
 class ApiKeyUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    is_active: Optional[bool] = None
+    name: str | None = None
+    is_active: bool | None = None
 
 
 # ── Settings ─────────────────────────────────────────
@@ -148,19 +148,19 @@ class ThemeResponse(BaseModel):
 class VariableCreateRequest(BaseModel):
     name: str
     value: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class VariableUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    value: Optional[str] = None
-    description: Optional[str] = None
+    name: str | None = None
+    value: str | None = None
+    description: str | None = None
 
 
 class VariableItem(BaseModel):
     id: str
     name: str
     value: str
-    description: Optional[str] = None
+    description: str | None = None
     created_at: str
     updated_at: str

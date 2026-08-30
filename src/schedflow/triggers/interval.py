@@ -1,13 +1,10 @@
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, tzinfo
 from math import ceil
-from typing import Optional, Mapping, Dict, Any
-from tzlocal import get_localzone
-from datetime import datetime, tzinfo
+from typing import Any
 
-from pydantic import (
-    Field, ConfigDict, model_validator, field_serializer
-)
+from pydantic import ConfigDict, Field, field_serializer, model_validator
+from tzlocal import get_localzone
 
 from schedflow.triggers.base import BaseTrigger, TriggerBaseConfigModel
 from schedflow.utils import (
@@ -17,17 +14,16 @@ from schedflow.utils import (
 )
 
 
-
 class IntervalTriggerModel(TriggerBaseConfigModel):
-    weeks: Optional[int] = Field(default=0, description="等待的周数")
-    days: Optional[int] = Field(default=0, description="等待的天数")
-    hours: Optional[int] = Field(default=0, description="等待的小时数")
-    minutes: Optional[int] = Field(default=0, description="等待的小时数")
-    seconds: Optional[int] = Field(default=0, description="等待的秒数")
-    start_date: Optional[datetime|str] = Field(default=None, description="开始计算运行时间的起始时间")
-    end_date: Optional[datetime|str] = Field(default=None, description="最后可能结束触发的运行时间")
-    timezone: Optional[tzinfo|str] = Field(default=None, description="计算所用的时区")
-    jitter: Optional[int] = Field(default=None, description="任务最多延迟执行的时间")
+    weeks: int | None = Field(default=0, description="等待的周数")
+    days: int | None = Field(default=0, description="等待的天数")
+    hours: int | None = Field(default=0, description="等待的小时数")
+    minutes: int | None = Field(default=0, description="等待的小时数")
+    seconds: int | None = Field(default=0, description="等待的秒数")
+    start_date: datetime | str | None = Field(default=None, description="开始计算运行时间的起始时间")
+    end_date: datetime | str | None = Field(default=None, description="最后可能结束触发的运行时间")
+    timezone: tzinfo | str | None = Field(default=None, description="计算所用的时区")
+    jitter: int | None = Field(default=None, description="任务最多延迟执行的时间")
 
     model_config = ConfigDict(
         json_schema_extra = {
@@ -49,11 +45,11 @@ class IntervalTriggerModel(TriggerBaseConfigModel):
 
     @model_validator(mode='before')
     @classmethod
-    def interval_model_validator(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def interval_model_validator(cls, data: dict[str, Any]) -> dict[str, Any]:
         timezone = data.get('timezone')
         start_date = data.get('start_date')
         end_date = data.get('end_date')
-        
+
         if timezone:
             data['timezone'] = astimezone(timezone)
         elif isinstance(start_date, datetime) and start_date.tzinfo:
@@ -96,9 +92,17 @@ class IntervalTrigger(BaseTrigger):
     """
 
     __slots__ = (
-        "weeks", "days", "hours", "minutes", "seconds",
-        "start_date", "end_date", "timezone", "jitter",
-        "_interval", "_interval_length",
+        "_interval",
+        "_interval_length",
+        "days",
+        "end_date",
+        "hours",
+        "jitter",
+        "minutes",
+        "seconds",
+        "start_date",
+        "timezone",
+        "weeks",
     )
     _trigger_type = "interval"
     _pydantic_model_cls = IntervalTriggerModel
@@ -115,7 +119,7 @@ class IntervalTrigger(BaseTrigger):
         start_date=None,
         end_date=None,
         timezone=None,
-        jitter: Optional[int] = None,
+        jitter: int | None = None,
     ):
         super().__init__(
             None,
@@ -152,7 +156,7 @@ class IntervalTrigger(BaseTrigger):
             next_fire_time = self.start_date.timestamp()
         else:
             timediff = now.timestamp() - self.start_date.timestamp()
-            next_interval_num = int(ceil(timediff / self._interval_length))
+            next_interval_num = ceil(timediff / self._interval_length)
             next_fire_time = (
                 self.start_date.timestamp() + self._interval_length * next_interval_num
             )

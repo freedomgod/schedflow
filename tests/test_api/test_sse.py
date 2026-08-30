@@ -4,9 +4,7 @@ import json
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
-
 
 FUTURE_RUN_TIME = (datetime.now() + timedelta(days=365)).isoformat()
 
@@ -124,28 +122,26 @@ class TestSSEEndpoint:
     def test_sse_unknown_job_returns_error_event(self):
         """SSE endpoint for unknown job should return error event stream."""
         app = self._make_app()
-        with TestClient(app) as client:
-            with client.stream(
-                "GET", "/api/v1/sse/jobs/nonexistent/next-run-time"
-            ) as response:
-                assert response.status_code == 200
-                assert "text/event-stream" in response.headers["content-type"]
-                chunk = next(response.iter_bytes())
-                text = chunk.decode()
-                assert "error" in text
-                assert "Job not found" in text
+        with TestClient(app) as client, client.stream(
+            "GET", "/api/v1/sse/jobs/nonexistent/next-run-time"
+        ) as response:
+            assert response.status_code == 200
+            assert "text/event-stream" in response.headers["content-type"]
+            chunk = next(response.iter_bytes())
+            text = chunk.decode()
+            assert "error" in text
+            assert "Job not found" in text
 
     def test_sse_endpoint_headers(self):
         """SSE endpoint response should include proper SSE headers."""
         app = self._make_app()
-        with TestClient(app) as client:
-            with client.stream(
-                "GET", "/api/v1/sse/jobs/nonexistent/next-run-time"
-            ) as response:
-                assert response.status_code == 200
-                assert "text/event-stream" in response.headers["content-type"]
-                assert response.headers.get("cache-control") == "no-cache"
-                assert response.headers.get("connection") == "keep-alive"
+        with TestClient(app) as client, client.stream(
+            "GET", "/api/v1/sse/jobs/nonexistent/next-run-time"
+        ) as response:
+            assert response.status_code == 200
+            assert "text/event-stream" in response.headers["content-type"]
+            assert response.headers.get("cache-control") == "no-cache"
+            assert response.headers.get("connection") == "keep-alive"
 
 
 class TestSSEJobsListEndpoint:

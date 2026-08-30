@@ -1,6 +1,6 @@
 """trigger API tests: explicit constructors + JSON registry."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -27,7 +27,7 @@ def test_interval_rejects_trigger_model_parameter():
 
 def test_interval_next_fire_time():
     trigger = IntervalTrigger(seconds=60)
-    now = datetime(2026, 8, 1, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 8, 1, 12, 0, 0, tzinfo=UTC)
     next_time = trigger.get_next_fire_time(None, now)
     assert next_time is not None
     assert next_time > now

@@ -20,7 +20,7 @@ def test_get_core_scheduler_is_valid_dependency(app):
     from schedflow.api.deps import get_core_scheduler
 
     app.add_api_route(
-        "/test-dep", lambda s=Depends(get_core_scheduler): {"ok": True}  # noqa: B008
+        "/test-dep", lambda s=Depends(get_core_scheduler): {"ok": True}
     )
     with TestClient(app) as client:
         resp = client.get("/test-dep")
@@ -34,7 +34,7 @@ def test_get_core_scheduler_returns_correct_instance(app):
 
     app.add_api_route(
         "/test-scheduler",
-        lambda s=Depends(get_core_scheduler): {"type": type(s).__name__},  # noqa: B008
+        lambda s=Depends(get_core_scheduler): {"type": type(s).__name__},
     )
     with TestClient(app) as client:
         resp = client.get("/test-scheduler")
@@ -48,7 +48,7 @@ def test_get_core_scheduler_is_same_instance(app):
 
     app.add_api_route(
         "/test-same",
-        lambda s=Depends(get_core_scheduler): {"same": s is app.state.scheduler},  # noqa: B008
+        lambda s=Depends(get_core_scheduler): {"same": s is app.state.scheduler},
     )
     with TestClient(app) as client:
         resp = client.get("/test-same")
