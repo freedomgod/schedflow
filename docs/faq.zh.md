@@ -105,6 +105,6 @@ Vue 3 管理面板通过 Element Plus 与响应式 CSS 适配平板和桌面端�
 
 `mkdocstrings` 需要其一才能格式化函数签名。安装 `.[doc]`（已包含 `ruff`）即可消除该提示。
 
-### 为什么 readthedocs 的 `/zh-cn/latest/` 链接会 404？
+### 为什么英文链接是 `/zh-cn/latest/en/` 这种嵌套路径？
 
-这是站点根路径与 RTD 语言前缀不匹配造成的。当前配置已把中文设为默认语言，并把 `site_url` 指向 `https://schedflow.readthedocs.io/zh-cn/latest/`，语言切换链接会带上该前缀。若仍出现 404，请确认 RTD 项目的语言设置为“Chinese (Simplified)”，并使用最新构建版本。
+这是两层机制叠加：Read the Docs 会按项目语言给 URL 加前缀（本项目为 `/zh-cn/latest/`），而 mkdocs-static-i18n 在站点内部把英文放在 `/en/`，于是英文页完整地址就是 `/zh-cn/latest/en/`。`/zh-cn/` 前缀由 RTD 项目语言设置决定，无法去掉；本地 `mkdocs serve` 没有该前缀（中文在根路径、英文在 `/en/`）。语言切换链接按相对路径生成，本地和线上均可正常跳转；若仍出现 404，请确认 RTD 项目语言为“Chinese (Simplified)”并使用最新构建。

@@ -42,7 +42,7 @@ dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/freedomgod/schedflow"
-Documentation = "https://schedflow.readthedocs.io/"
+Documentation = "https://schedflow.readthedocs.io/zh-cn/latest/"
 Repository = "https://github.com/freedomgod/schedflow"
 Issues = "https://github.com/freedomgod/schedflow/issues"
 
@@ -79,10 +79,12 @@ test = [
 ]
 
 doc = [
-    "mkdocs>=1.6",
-    "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.25",
-    "mkdocs-static-i18n>=1.2",
+    # 上限锁定：MkDocs 2.0 移除插件系统且无迁移路径，
+    # 避免未来 `pip install .[doc]` 误装 2.x 导致文档构建失败。
+    "mkdocs>=1.6,<2",
+    "mkdocs-material>=9.5,<10",
+    "mkdocstrings[python]>=0.25,<2",
+    "mkdocs-static-i18n>=1.2,<2",
     "ruff",
     # Optional runtime dependencies are documented in the API reference;
     # include them so `mkdocs build` can import every documented module.

@@ -87,6 +87,8 @@ plugins:
             Contributing: 贡献指南
             FAQ: 常见问题
             License: 许可证
+hooks:
+  - hooks.py
 markdown_extensions:
   - admonition
   - pymdownx.highlight:

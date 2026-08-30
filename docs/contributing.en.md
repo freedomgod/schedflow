@@ -66,6 +66,7 @@ mkdocs build     # build the static site into site/
 - Chinese is the primary version at the site root; English lives under `/en/`;
 - New pages must be added to the `nav` in `mkdocs.yml` (plus `nav_translations` entries when needed), otherwise the build warns about pages not in the nav;
 - Code examples in the docs must be runnable; re-run them after API changes;
+- The homepage language-switcher links are rewritten to relative paths by `hooks.py` at the repository root, so they work under both `mkdocs serve` and the Read the Docs deployment; keep it in sync when touching language-related logic;
 - On Read the Docs, `site_url` must match the RTD language prefix (currently `https://schedflow.readthedocs.io/zh-cn/latest/`), or language-switcher links will 404.
 
 ## Pull request workflow

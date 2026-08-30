@@ -116,6 +116,6 @@ That is an **informational announcement** from the Material theme about the upco
 
 `mkdocstrings` needs one of them to format function signatures. Installing `.[doc]` (which includes `ruff`) removes the message.
 
-### Why do readthedocs `/zh-cn/latest/` links 404?
+### Why is the English URL a nested path like `/zh-cn/latest/en/`?
 
-That was a mismatch between the site root and Read the Docs' language prefix. The current config makes Chinese the default language and points `site_url` at `https://schedflow.readthedocs.io/zh-cn/latest/`, so language-switcher links carry the prefix. If 404s persist, confirm the RTD project language is "Chinese (Simplified)" and that the latest build succeeded.
+Two layers stack: Read the Docs prefixes the URL with the project language (`/zh-cn/latest/` here), while mkdocs-static-i18n puts English under `/en/` inside the site, so the English URL becomes `/zh-cn/latest/en/`. The `/zh-cn/` prefix comes from the RTD project language setting and cannot be removed; under local `mkdocs serve` there is no prefix (Chinese at the root, English at `/en/`). Switcher links are page-relative and work both locally and on Read the Docs. If links still 404, confirm the RTD project language is "Chinese (Simplified)" and that the latest build succeeded.

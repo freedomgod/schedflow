@@ -66,6 +66,7 @@ mkdocs build     # 构建静态网站到 site/
 - 中文文档是主版本，位于站点根路径；英文版位于 `/en/`；
 - 新增页面必须同时加入 `mkdocs.yml` 的 `nav`（以及必要的 `nav_translations`），否则会出现 “pages exist ... not included in the nav” 警告；
 - 文档中的代码示例必须可运行，改动 API 相关文档后请在本地跑一遍示例；
+- 语言切换下拉框在首页的链接由仓库根目录 `hooks.py` 修正为相对路径，`mkdocs serve` 与 Read the Docs 部署下均可用，改动语言相关逻辑时需同步更新；
 - 部署到 Read the Docs 时，站点的 `site_url` 必须与 RTD 语言前缀一致（当前为 `https://schedflow.readthedocs.io/zh-cn/latest/`），否则语言切换链接会 404。
 
 ## Pull Request 流程
