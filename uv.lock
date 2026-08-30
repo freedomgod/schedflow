@@ -1473,7 +1473,7 @@ requires-dist = [
     { name = "pytest-twisted", marker = "extra == 'test'", specifier = ">=1.3.0" },
     { name = "pytz", marker = "extra == 'test'" },
     { name = "redis", marker = "extra == 'redis'", specifier = ">=3.0" },
-    { name = "ruff", marker = "extra == 'doc'" },
+    { name = "ruff", marker = "extra == 'doc'", specifier = "==0.16.1" },
     { name = "schedflow", extras = ["gevent", "mongodb", "redis", "sqlalchemy", "tornado", "twisted", "web"], marker = "extra == 'all'" },
     { name = "schedflow", extras = ["mongodb", "redis", "sqlalchemy", "tornado", "web"], marker = "extra == 'test'" },
     { name = "schedflow", extras = ["mongodb", "redis", "sqlalchemy", "web"], marker = "extra == 'doc'" },

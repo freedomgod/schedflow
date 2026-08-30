@@ -85,7 +85,8 @@ doc = [
     "mkdocs-material>=9.5,<10",
     "mkdocstrings[python]>=0.25,<2",
     "mkdocs-static-i18n>=1.2,<2",
-    "ruff",
+    # 与 .pre-commit-config.yaml 的 rev 保持一致
+    "ruff==0.16.1",
     # Optional runtime dependencies are documented in the API reference;
     # include them so `mkdocs build` can import every documented module.
     "schedflow[web,sqlalchemy,redis,mongodb]",
@@ -131,6 +132,13 @@ extend-select = [
     "UP",           # pyupgrade
     "W",            # pycodestyle warnings
 ]
+ignore = [
+    # FastAPI 惯例：依赖注入通过默认参数 Depends(...) 实现，
+    # 属于框架标准写法，不需要规避。
+    "B008",
+]
+# 中文 UI 文案使用全角标点是正常书写，不属于“混淆字符”误用
+allowed-confusables = ["，"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["schedflow"]
