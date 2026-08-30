@@ -196,7 +196,7 @@ const totalRefCount = computed(() =>
 
 const SENSITIVE_KEYS = ['password', 'passwd', 'pwd', 'secret', 'secret_key', 'token', 'api_key', 'access_key', 'auth', 'authorization']
 
-function formatVal(key: string, val: unknown): string {
+function formatVal(key: string | number, val: unknown): string {
   const lower = String(key).toLowerCase()
   if (SENSITIVE_KEYS.some((k) => lower === k || lower.endsWith(`_${k}`))) {
     return '******'
@@ -243,7 +243,7 @@ function openEditDialog(row: any) {
   editingAlias.value = row.alias
   form.alias = row.alias
   form.type = row.type
-  form.config = { ...row.config } || {}
+  form.config = { ...row.config }
   dialogVisible.value = true
 }
 

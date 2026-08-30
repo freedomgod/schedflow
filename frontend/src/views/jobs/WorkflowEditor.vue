@@ -49,11 +49,16 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import LogicFlow, { RectNode, RectNodeModel, h } from '@logicflow/core'
-import dagre, { graphlib } from 'dagre'
+import dagre, { Graph } from 'dagre'
 import NodeConfigDrawer from './NodeConfigDrawer.vue'
 import EdgeConfigDrawer from './EdgeConfigDrawer.vue'
 import type { DagData, EdgeProperties, TaskNodeProperties, KeyValuePair } from '@/types/workflow'
 import type { JSX } from 'preact'
+
+interface LfGraphData {
+  nodes?: Array<{ id: string }>
+  edges?: Array<{ id: string; sourceNodeId: string; targetNodeId: string }>
+}
 
 // ── Node type color config (fill + stroke, no emoji) ──
 const NODE_TYPE_STYLES: Record<string, { fill: string; stroke: string }> = {
@@ -183,13 +188,13 @@ function hideContextMenu() {
 function applyAutoLayout() {
   if (!lfInstance.value) return
 
-  const graphData = lfInstance.value.getGraphData()
-  const rawNodes = (graphData.nodes || []) as Array<{ id: string }>
-  const rawEdges = (graphData.edges || []) as Array<{ id: string; sourceNodeId: string; targetNodeId: string }>
+  const graphData = lfInstance.value.getGraphData() as LfGraphData
+  const rawNodes = graphData.nodes || []
+  const rawEdges = graphData.edges || []
 
   if (rawNodes.length === 0) return
 
-  const g = new graphlib.Graph()
+  const g = new Graph()
   g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 80, marginx: 80, marginy: 80 })
   g.setDefaultEdgeLabel(() => ({}))
 
@@ -201,7 +206,7 @@ function applyAutoLayout() {
   })
 
   try {
-    dagre.layout(g)
+    dagre(g)
   } catch (e) {
     console.error('Dagre layout error:', e)
     return
@@ -230,13 +235,13 @@ function syncReadonlyState() {
     textEdit: !ro,
     nodeTextEdit: !ro,
     edgeTextEdit: !ro,
-    nodeTextMode: 'text',
+    nodeTextMode: 'text' as any,
     stopMoveGraph: false,
     stopZoomGraph: false,
   })
 
-  const graphData = lf.getGraphData()
-  const allNodes = (graphData.nodes || []) as Array<{ id: string }>
+  const graphData = lf.getGraphData() as LfGraphData
+  const allNodes = graphData.nodes || []
   for (const node of allNodes) {
     const nodeModel = lf.getNodeModelById(node.id)
     if (nodeModel) {
@@ -346,7 +351,7 @@ onMounted(() => {
   // Apply dark-mode-optimized text theme
   lf.setTheme({
     nodeText: { color: 'rgba(255,255,255,0.90)', fontSize: 12, fontWeight: 500 },
-    edgeText: { color: 'rgba(255,255,255,0.60)', fontSize: 11 },
+    edgeText: { color: 'rgba(255,255,255,0.60)', fontSize: 11, textWidth: 100 },
   })
   lf.render({})
 
@@ -603,7 +608,7 @@ function computeDagreLayout(data: DagData): Map<string, { x: number; y: number }
 
   if (data.nodes.length === 0) return positions
 
-  const g = new graphlib.Graph()
+  const g = new Graph()
   g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 80, marginx: 80, marginy: 80 })
   g.setDefaultEdgeLabel(() => ({}))
 
@@ -615,7 +620,7 @@ function computeDagreLayout(data: DagData): Map<string, { x: number; y: number }
   }
 
   try {
-    dagre.layout(g)
+    dagre(g)
   } catch (e) {
     console.error('Dagre layout error:', e)
     return positions
@@ -714,8 +719,8 @@ function loadDag(data: DagData) {
   }
 
   nextTick(() => {
-    const graphData = lf.getGraphData()
-    const allNodes = (graphData.nodes || []) as Array<{ id: string }>
+    const graphData = lf.getGraphData() as LfGraphData
+    const allNodes = graphData.nodes || []
 
     for (const node of allNodes) {
       const nodeModel = lf.getNodeModelById(node.id)
