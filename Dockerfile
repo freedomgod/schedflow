@@ -8,6 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml MANIFEST.in README.md README_EN.md LICENSE.txt ./
+COPY .env.example /app/.env.example
 COPY src ./src
 RUN pip install --upgrade pip && \
     pip install ".[web,sqlalchemy,redis,mongodb]"

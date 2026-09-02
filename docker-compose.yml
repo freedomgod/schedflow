@@ -3,14 +3,17 @@ services:
     build:
       context: .
       target: backend
+    env_file:
+      - path: .env
+        required: false
     environment:
-      HOST: 0.0.0.0
-      PORT: 8000
-      SCHEDFLOW_META_DB: /app/data/scheduler_meta.db
+      SCHEDFLOW_ENV_FILE: /app/.env
+      SCHEDFLOW_META_DB: ${SCHEDFLOW_META_DB:-/app/data/scheduler_meta.db}
     ports:
-      - 127.0.0.1:8000:8000
+      - "${SCHEDFLOW_BIND_HOST:-127.0.0.1}:${SCHEDFLOW_API_PORT:-8000}:8000"
     volumes:
       - ./data:/app/data
+      - ./.env:/app/.env:ro
     restart: unless-stopped
 
   web:
@@ -18,9 +21,9 @@ services:
       context: .
       target: web
     environment:
-      SCHEDFLOW_API_URL: http://api:8000
+      SCHEDFLOW_API_URL: ${SCHEDFLOW_API_URL:-http://api:8000}
     ports:
-      - 127.0.0.1:4173:4173
+      - "${SCHEDFLOW_BIND_HOST:-127.0.0.1}:${SCHEDFLOW_WEB_PORT:-4173}:4173"
     depends_on:
       - api
     restart: unless-stopped
