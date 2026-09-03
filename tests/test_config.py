@@ -98,6 +98,22 @@ class TestDefaultMetaDB:
     def test_default_meta_db_is_path(self):
         assert isinstance(DEFAULT_META_DB, Path)
 
+    def test_env_file_override(self, monkeypatch, tmp_path):
+        """SCHEDFLOW_ENV_FILE points the settings loader at a custom .env."""
+        import importlib
+
+        from schedflow.configs import settings as settings_module
+
+        env_file = tmp_path / "custom.env"
+        env_file.write_text("PORT=9999\n", encoding="utf-8")
+        monkeypatch.setenv("SCHEDFLOW_ENV_FILE", str(env_file))
+        importlib.reload(settings_module)
+        try:
+            assert settings_module.settings.PORT == 9999
+        finally:
+            monkeypatch.undo()
+            importlib.reload(settings_module)
+
     def test_env_var_override(self, monkeypatch):
         import importlib
 

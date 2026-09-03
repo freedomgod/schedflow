@@ -8,8 +8,15 @@ The metadata database path (``SCHEDFLOW_META_DB``) is resolved against the
 project root rather than the current working directory, so the same database
 is used no matter where the process is launched from. It defaults to
 ``data/scheduler_meta.db`` so runtime files stay out of the repository root.
+
+The .env file itself defaults to ``<project root>/.env``. When the package is
+installed non-editable (e.g. inside a Docker image) that location points into
+site-packages, so deployments may point the settings loader at a mounted file
+through the ``SCHEDFLOW_ENV_FILE`` environment variable (for example
+``SCHEDFLOW_ENV_FILE=/app/.env`` in docker compose).
 """
 
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,10 +38,14 @@ def _find_project_root() -> Path:
 
 PROJECT_ROOT = _find_project_root()
 
+#: .env 文件路径。默认取项目根目录；容器等非可编辑安装场景可通过
+#: SCHEDFLOW_ENV_FILE 环境变量指向挂载进来的配置文件（如 /app/.env）。
+_ENV_FILE = os.environ.get("SCHEDFLOW_ENV_FILE") or str(PROJECT_ROOT / ".env")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
+        env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
