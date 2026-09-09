@@ -173,3 +173,24 @@ class TestMongoDBJobStore:
             assert job is not None and job.job_id == "j1"
         finally:
             store.close()
+
+    def test_get_due_uses_indexed_utc_field(self):
+        store = MongoDBJobStore(
+            host="localhost", port=27017, database="schedflow_test"
+        )
+        try:
+            now = datetime.now(UTC)
+            past = make_job("mongo-past")
+            past.next_run_time = now - timedelta(seconds=1)
+            future = make_job("mongo-future")
+            future.next_run_time = now + timedelta(hours=1)
+            store.add(future)
+            store.add(past)
+
+            due = store.get_due(now)
+            assert [job.job_id for job in due] == ["mongo-past"]
+            assert store.get_next_run_time() == past.next_run_time
+            indexes = store._collection.index_information()
+            assert any("next_run_utc" in key[0] for key in indexes.values())
+        finally:
+            store.close()

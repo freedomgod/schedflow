@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from schedflow.core.job import Job
 from schedflow.core.jobstore import (
@@ -43,6 +43,31 @@ class MongoDBJobStore(JobStore):
         )
         self._collection = self._client[database][collection]
         self._logs_collection = self._client[database][f"{collection}_logs"]
+        self._indexes_ensured = False
+
+    def _ensure_indexes(self) -> None:
+        if self._indexes_ensured:
+            return
+        self._collection.create_index("next_run_utc", background=True)
+        self._indexes_ensured = True
+
+    @staticmethod
+    def _next_run_utc(job: Job) -> str | None:
+        if job.next_run_time is None:
+            return None
+        return job.next_run_time.astimezone(UTC).isoformat()
+
+    def _backfill_next_run_utc(self) -> None:
+        missing = self._collection.find({"next_run_utc": {"$exists": False}})
+        for document in missing:
+            job = Job.from_dict(json.loads(document["job_json"]))
+            value = self._next_run_utc(job)
+            if value is None:
+                continue
+            self._collection.update_one(
+                {"_id": job.job_id},
+                {"$set": {"next_run_utc": value}},
+            )
 
     def add(self, job: Job) -> None:
         try:
@@ -50,6 +75,7 @@ class MongoDBJobStore(JobStore):
                 {
                     "_id": job.job_id,
                     "job_json": json.dumps(job.to_dict(), ensure_ascii=False),
+                    "next_run_utc": self._next_run_utc(job),
                 }
             )
         except DuplicateKeyError:
@@ -58,7 +84,12 @@ class MongoDBJobStore(JobStore):
     def update(self, job: Job) -> None:
         result = self._collection.update_one(
             {"_id": job.job_id},
-            {"$set": {"job_json": json.dumps(job.to_dict(), ensure_ascii=False)}},
+            {
+                "$set": {
+                    "job_json": json.dumps(job.to_dict(), ensure_ascii=False),
+                    "next_run_utc": self._next_run_utc(job),
+                }
+            },
         )
         if result.matched_count == 0:
             raise JobNotFoundError(job.job_id)
@@ -75,15 +106,16 @@ class MongoDBJobStore(JobStore):
         return Job.from_dict(json.loads(document["job_json"]))
 
     def get_due(self, now: datetime) -> list[Job]:
-        jobs = self._load_all()
-        return sorted(
-            (
-                job
-                for job in jobs
-                if job.next_run_time is not None and job.next_run_time <= now
-            ),
-            key=lambda job: job.next_run_time,
-        )
+        self._ensure_indexes()
+        self._backfill_next_run_utc()
+        now_utc = now.astimezone(UTC).isoformat()
+        documents = self._collection.find(
+            {"next_run_utc": {"$type": "string", "$lte": now_utc}}
+        ).sort("next_run_utc", 1)
+        return [
+            Job.from_dict(json.loads(document["job_json"]))
+            for document in documents
+        ]
 
     def get_all(self) -> list[Job]:
         jobs = self._load_all()
@@ -95,12 +127,15 @@ class MongoDBJobStore(JobStore):
         return scheduled + paused
 
     def get_next_run_time(self) -> datetime | None:
-        candidates = [
-            job.next_run_time
-            for job in self._load_all()
-            if job.next_run_time is not None
-        ]
-        return min(candidates) if candidates else None
+        self._ensure_indexes()
+        self._backfill_next_run_utc()
+        document = self._collection.find_one(
+            {"next_run_utc": {"$exists": True, "$ne": None}},
+            sort=[("next_run_utc", 1)],
+        )
+        if document is None:
+            return None
+        return datetime.fromisoformat(document["next_run_utc"])
 
     def add_log(self, job_id: str, log: ExecutionLog) -> None:
         self._logs_collection.insert_one(
