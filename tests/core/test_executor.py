@@ -90,3 +90,19 @@ def test_process_pool_unresolvable_ref_records_failure():
         assert "missing_module_xyz" in logs[0].records["a"].error
     finally:
         scheduler.shutdown()
+
+
+def test_job_run_accepts_cancel_event():
+    import threading
+
+    from schedflow.core.job import Job
+
+    wf = Workflow("cancel-exec")
+    wf.add_task("a", func="tests.core.test_executor:module_fn")
+    job = Job(wf, None, job_id="j-cancel")
+    event = threading.Event()
+
+    log = job.run(cancel_event=event)
+
+    assert log.succeeded
+    assert log.records["a"].result == 2

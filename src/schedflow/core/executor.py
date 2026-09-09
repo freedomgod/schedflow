@@ -21,6 +21,13 @@ class Executor(ABC):
     def start(self, scheduler) -> None:
         self._scheduler = scheduler
 
+    def _cancel_event(self, job: Job):
+        scheduler = getattr(self, "_scheduler", None)
+        if scheduler is None:
+            return None
+        resolver = getattr(scheduler, "_cancel_event_for", None)
+        return resolver(job.job_id) if resolver is not None else None
+
     def shutdown(self, *, wait: bool = True) -> None:
         pass
 
@@ -33,7 +40,7 @@ class DebugExecutor(Executor):
 
     def submit(self, job: Job, run_time: datetime) -> None:
         try:
-            log = job.run()
+            log = job.run(cancel_event=self._cancel_event(job))
         except Exception as exc:  # noqa: BLE001
             self._scheduler._on_job_finished(job, run_time, None, error=exc)
         else:
@@ -49,7 +56,10 @@ class ThreadPoolExecutor(Executor):
         )
 
     def submit(self, job: Job, run_time: datetime) -> None:
-        future = self._pool.submit(job.run)
+        future = self._pool.submit(
+            job.run,
+            cancel_event=self._cancel_event(job),
+        )
         future.add_done_callback(
             lambda completed: self._handle(job, run_time, completed)
         )

@@ -73,9 +73,19 @@ class Job:
                 None, datetime.now().astimezone()
             )
 
-    def run(self, *, max_workers: int = 3, executor: str = "thread") -> ExecutionLog:
+    def run(
+        self,
+        *,
+        max_workers: int = 3,
+        executor: str = "thread",
+        cancel_event=None,
+    ) -> ExecutionLog:
         """Execute the workflow directly; the resulting log carries job_id."""
-        log = self.workflow.run(max_workers=max_workers, executor=executor)
+        log = self.workflow.run(
+            max_workers=max_workers,
+            executor=executor,
+            cancel_event=cancel_event,
+        )
         log.job_id = self.job_id
         return log
 
