@@ -227,7 +227,8 @@ git commit -m "feat(core): heap-based due lookup in MemoryJobStore"
         sqlalchemy_store.add(paused)
 
         assert [job.job_id for job in sqlalchemy_store.get_due(now)] == ["past"]
-        assert sqlalchemy_store.get_next_run_time() == future.next_run_time
+        # get_next_run_time 返回最早调度时间（含已过期未跑的 past）
+        assert sqlalchemy_store.get_next_run_time() == past.next_run_time
 ```
 
 - [ ] **Step 2: 运行确认失败**
@@ -242,6 +243,7 @@ python -m pytest tests/core/test_stores.py::TestSQLAlchemyJobStore::test_get_due
     def test_get_due_requires_next_run_utc_column(self, sqlalchemy_store):
         import sqlalchemy as sa
 
+        sqlalchemy_store.get_due(datetime.now(UTC))
         with sqlalchemy_store._engine.connect() as connection:
             rows = connection.execute(
                 sa.text(

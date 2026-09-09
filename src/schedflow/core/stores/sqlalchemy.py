@@ -102,6 +102,8 @@ class SQLAlchemyJobStore(JobStore):
         for job_id, raw in rows:
             job = Job.from_dict(json.loads(raw))
             value = self._next_run_utc(job)
+            if value is None:
+                continue
             with self._engine.begin() as connection:
                 connection.execute(
                     self.jobs.update()
