@@ -36,6 +36,12 @@ export function resumeJob(id: string): Promise<Job> {
   return (schedulerClient.post(`/jobs/${id}/resume`) as Promise<any>).then(jobFromApi)
 }
 
+export function cancelJob(id: string): Promise<Job> {
+  return (schedulerClient.post(`/jobs/${id}/cancel`) as Promise<any>).then(
+    jobFromApi,
+  )
+}
+
 /**
  * EventSource cannot set Authorization headers, so the JWT is appended as a
  * query parameter for SSE endpoints (the backend accepts both forms).

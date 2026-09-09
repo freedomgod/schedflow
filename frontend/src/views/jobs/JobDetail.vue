@@ -27,10 +27,11 @@
           <h3 class="card-section-title">基本信息</h3>
           <dl class="info-list">
             <div class="info-row"><dt>名称</dt><dd>{{ job.name }}</dd></div>
-            <div class="info-row"><dt>状态</dt><dd><span class="status-badge" :class="'badge-' + statusType(job.job_status)">{{ job.job_status === 'RUNNING' ? '启用' : '暂停' }}</span></dd></div>
+            <div class="info-row"><dt>状态</dt><dd><span class="status-badge" :class="'badge-' + statusType(job.job_status)">{{ job.job_status === 'RUNNING' ? '启用' : job.job_status === 'COMPLETED' ? '已完成' : '暂停' }}</span></dd></div>
             <div class="info-row"><dt>执行器</dt><dd><span class="config-link" @click="showExecutorConfig(job.executor)">{{ job.executor }}</span></dd></div>
             <div class="info-row"><dt>存储后端</dt><dd><span class="config-link" @click="showJobstoreConfig(job.jobstore)">{{ job.jobstore }}</span></dd></div>
             <div class="info-row"><dt>触发器</dt><dd><span class="config-link" @click="showTriggerConfig">{{ job.trigger || '-' }}</span></dd></div>
+            <div class="info-row"><dt>优先级</dt><dd>{{ job.priority ?? 0 }}</dd></div>
           </dl>
         </div>
 
@@ -207,7 +208,11 @@ const displayNextRunTime = computed(() => {
   return val ? new Date(val).toLocaleString() : '-'
 })
 
-function statusType(s: string) { return s === 'RUNNING' ? 'running' : s === 'PAUSED' ? 'paused' : 'warning' }
+function statusType(s: string) {
+  if (s === 'RUNNING') return 'running'
+  if (s === 'PAUSED') return 'paused'
+  return 'warning'
+}
 
 function handleNodeClick(nodeId: string, nodeData: TaskNodeProperties | null) { infoSidebarNodeId.value = nodeId; infoSidebarNodeData.value = nodeData; infoSidebarVisible.value = true }
 function handleSidebarClose() { infoSidebarVisible.value = false }

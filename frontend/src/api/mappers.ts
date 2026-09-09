@@ -91,12 +91,13 @@ export function jobFromApi(job: any): Job {
     id: job.job_id,
     name: job.name,
     description: job.description,
-    job_status: (job.status || 'running').toUpperCase(),
+    job_status: ((job.status || 'running').toUpperCase()) as Job['job_status'],
     executor: job.executor_alias,
     jobstore: job.jobstore_alias,
     misfire_grace_time: job.misfire_grace_time,
     coalesce: job.coalesce,
     max_instances: job.max_instances,
+    priority: job.priority ?? 0,
     next_run_time: job.next_run_time,
     func_ref: typeof firstTask?.ref === 'string' ? firstTask.ref : undefined,
     dag,
@@ -143,6 +144,7 @@ export function jobCreatePayload(params: JobCreateParams): any {
     misfire_grace_time: params.misfire_grace_time,
     coalesce: params.coalesce,
     max_instances: params.max_instances,
+    priority: params.priority,
     replace: params.replace_existing,
   }
 }
@@ -157,6 +159,7 @@ export function jobUpdatePayload(params: JobUpdateParams): any {
     misfire_grace_time: params.misfire_grace_time,
     coalesce: params.coalesce,
     max_instances: params.max_instances,
+    priority: params.priority,
   }
   if (params.dag) {
     result.workflow = dagToWorkflow(params.dag)

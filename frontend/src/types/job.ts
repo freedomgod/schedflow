@@ -4,9 +4,10 @@ export interface Job {
   id: string
   name: string
   description?: string
-  job_status: string
+  job_status: 'RUNNING' | 'PAUSED' | 'COMPLETED'
   executor: string
   jobstore: string
+  priority?: number
   misfire_grace_time?: number
   coalesce?: boolean
   max_instances?: number
@@ -37,6 +38,7 @@ export interface JobCreateParams {
   misfire_grace_time?: number
   coalesce?: boolean
   max_instances?: number
+  priority?: number
   next_run_time?: string
   replace_existing?: boolean
 }
@@ -48,6 +50,7 @@ export interface JobUpdateParams {
   misfire_grace_time?: number
   coalesce?: boolean
   max_instances?: number
+  priority?: number
   next_run_time?: string
   executor?: string
   jobstore?: string

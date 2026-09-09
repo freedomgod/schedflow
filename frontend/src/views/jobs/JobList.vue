@@ -21,6 +21,7 @@
           <option value="">全部状态</option>
           <option value="RUNNING">启用</option>
           <option value="PAUSED">暂停</option>
+          <option value="COMPLETED">已完成</option>
         </select>
         <select v-model="executorFilter" class="filter-select">
           <option value="">全部执行器</option>
@@ -55,7 +56,11 @@
             <td class="cell-name">{{ job.name }}</td>
             <td class="cell-id">{{ job.id }}</td>
             <td>
+              <template v-if="job.job_status === 'COMPLETED'">
+                <span class="cell-tag">已完成</span>
+              </template>
               <button
+                v-else
                 class="toggle-switch"
                 :class="{ active: job.job_status === 'RUNNING', loading: togglingStatus.has(job.id) }"
                 @click="handleToggleStatus(job, job.job_status !== 'RUNNING')"
@@ -69,6 +74,7 @@
             <td class="cell-time">{{ job.next_run_time ? formatTime(job.next_run_time) : '-' }}</td>
             <td class="cell-actions">
               <button class="action-btn" @click="$router.push(`/jobs/${job.id}`)">详情</button>
+              <button v-if="job.job_status !== 'COMPLETED'" class="action-btn" @click="handleCancel(job.id)">取消</button>
               <button class="action-btn" @click="handleCopy(job.id)">复制</button>
               <button class="action-btn danger" @click="handleDelete(job.id)">删除</button>
             </td>
@@ -97,7 +103,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  getJobs, getJob, createJob, deleteJob, pauseJob, resumeJob,
+  getJobs, getJob, createJob, deleteJob, pauseJob, resumeJob, cancelJob,
   connectAllJobsNextRunTimeSSE,
 } from '@/api/jobs'
 import type { Job, JobCreateParams } from '@/types'
@@ -188,6 +194,16 @@ async function handleDelete(id: string) {
   await deleteJob(id)
   await fetchJobs(true)
   useSchedulerStore().fetchStatus(true)
+}
+
+async function handleCancel(id: string) {
+  try {
+    await cancelJob(id)
+    ElMessage.success('已发起取消')
+  } catch {
+    ElMessage.warning('任务未在运行，无法取消')
+  }
+  await fetchJobs(true)
 }
 
 function applyNextRunSnapshot(snapshot: Record<string, string | null>) {
