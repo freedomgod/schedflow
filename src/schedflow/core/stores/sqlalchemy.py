@@ -74,8 +74,10 @@ class SQLAlchemyJobStore(JobStore):
         return job.next_run_time.astimezone(UTC).isoformat()
 
     def _ensure(self) -> None:
-        self._metadata.create_all(self._engine, checkfirst=True)
         inspector = sa.inspect(self._engine)
+        if "jobs" not in set(inspector.get_table_names()):
+            self._metadata.create_all(self._engine, checkfirst=True)
+            return
         columns = {
             column["name"] for column in inspector.get_columns("jobs")
         }
@@ -86,9 +88,17 @@ class SQLAlchemyJobStore(JobStore):
                         "ALTER TABLE jobs ADD COLUMN next_run_utc VARCHAR(64)"
                     )
                 )
-        sa.Index(
-            "ix_jobs_next_run_utc", self.jobs.c.next_run_utc
-        ).create(self._engine, checkfirst=True)
+        index_names = {
+            index["name"] for index in inspector.get_indexes("jobs")
+        }
+        if "ix_jobs_next_run_utc" not in index_names:
+            with self._engine.begin() as connection:
+                connection.execute(
+                    sa.text(
+                        "CREATE INDEX ix_jobs_next_run_utc "
+                        "ON jobs (next_run_utc)"
+                    )
+                )
         self._backfill_next_run_utc()
 
     def _backfill_next_run_utc(self) -> None:
