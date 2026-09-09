@@ -544,7 +544,7 @@ git commit -m "feat(stores): indexed next-run lookup for MongoDBJobStore"
             store.add(past)
 
             assert [job.job_id for job in store.get_due(now)] == ["redis-past"]
-            assert store.get_next_run_time() == future.next_run_time
+            assert store.get_next_run_time() == past.next_run_time
         finally:
             store.close()
 ```

@@ -174,6 +174,22 @@ class TestMongoDBJobStore:
         finally:
             store.close()
 
+    def test_get_due_and_next_run_time_use_run_times_index(self):
+        store = RedisJobStore(host="localhost", port=6379, db=15)
+        try:
+            now = datetime.now(UTC)
+            past = make_job("redis-past")
+            past.next_run_time = now - timedelta(seconds=1)
+            future = make_job("redis-future")
+            future.next_run_time = now + timedelta(hours=1)
+            store.add(future)
+            store.add(past)
+
+            assert [job.job_id for job in store.get_due(now)] == ["redis-past"]
+            assert store.get_next_run_time() == past.next_run_time
+        finally:
+            store.close()
+
     def test_get_due_uses_indexed_utc_field(self):
         store = MongoDBJobStore(
             host="localhost", port=27017, database="schedflow_test"
