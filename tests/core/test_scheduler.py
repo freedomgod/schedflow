@@ -381,3 +381,35 @@ def test_cancel_running_job_marks_cancel_event():
     scheduler.cancel_job("j1")
 
     assert scheduler._cancel_events["j1"].is_set()
+
+
+def test_one_shot_job_kept_as_completed_after_final_run():
+    scheduler = make_scheduler()
+    seen = []
+    scheduler.on("job.completed", seen.append)
+    scheduler.add_job(
+        make_workflow(), trigger=StaticTrigger(datetime.now(UTC)), job_id="j1"
+    )
+    job = scheduler.get_job("j1")
+
+    scheduler._advance(job, job.next_run_time, datetime.now(UTC))
+
+    stored = scheduler.get_job("j1")
+    assert stored is not None
+    assert stored.status == "completed"
+    assert stored.next_run_time is None
+    assert seen and seen[0].kind == "job.completed"
+
+
+def test_resume_job_keeps_completed_when_trigger_exhausted():
+    scheduler = make_scheduler()
+    scheduler.add_job(
+        make_workflow(), trigger=StaticTrigger(datetime.now(UTC)), job_id="j1"
+    )
+    job = scheduler.get_job("j1")
+    scheduler._advance(job, job.next_run_time, datetime.now(UTC))
+
+    scheduler.resume_job("j1")
+
+    assert scheduler.get_job("j1").status == "completed"
+    assert scheduler.get_job("j1").next_run_time is None

@@ -497,6 +497,8 @@ class Scheduler:
                 job.next_run_time = trigger.get_next_fire_time(
                     None, datetime.now(self._timezone)
                 )
+                if job.status == "completed":
+                    job.status = "running"
             if executor_alias is not None:
                 job.executor_alias = executor_alias
             if jobstore_alias is not None:
@@ -546,6 +548,15 @@ class Scheduler:
             job = self._find_job(job_id)
             if job is None:
                 raise JobNotFoundError(job_id)
+            if job.status == "completed":
+                store = self._jobstores.get(
+                    job.jobstore_alias, self._jobstore
+                )
+                store.update(job)
+                self._events.publish(
+                    SchedulerEvent("job.resumed", job_id=job_id)
+                )
+                return job
             job.status = "running"
             job.next_run_time = (
                 job.trigger.get_next_fire_time(
@@ -801,12 +812,14 @@ class Scheduler:
         else:
             next_run = job.trigger.get_next_fire_time(run_time, now)
             if next_run is None:
+                job.status = "completed"
+                job.next_run_time = None
                 try:
-                    store.remove(job.job_id)
+                    store.update(job)
                 except JobNotFoundError:
-                    pass
+                    return
                 self._events.publish(
-                    SchedulerEvent("job.removed", job_id=job.job_id)
+                    SchedulerEvent("job.completed", job_id=job.job_id)
                 )
                 return
             job.next_run_time = next_run
