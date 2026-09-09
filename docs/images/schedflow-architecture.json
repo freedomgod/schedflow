@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "SchedFlow 架构总览：定时工作流的创建、调度与执行",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "viewBox": [1390, 560],
+    "views": [
+      {
+        "id": "main-path",
+        "label": "创建 → 调度 → 执行 → 持久化",
+        "focus": ["web", "api", "scheduler", "executor", "workflow", "log", "jobstore"],
+        "note": "一条主路径：从注册定时工作流到结果日志落库。"
+      },
+      {
+        "id": "execution-core",
+        "label": "调度执行核心",
+        "focus": ["scheduler", "trigger", "executor", "workflow", "runner", "log"],
+        "note": "触发器决定到期时刻，执行器运行 DAG，Runner 按类型执行节点。"
+      },
+      {
+        "id": "management-side",
+        "label": "管理、认证与持久化",
+        "focus": ["api", "auth", "scheduler", "jobstore"],
+        "note": "认证中间件保护 API，JobStore 保存任务与执行日志。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "用户 / 调用方",
+      "sublabel": "Web UI · CLI\nAPI 客户端",
+      "pos": [80, 220],
+      "size": [190, 84]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "REST / SSE API",
+      "sublabel": "FastAPI\n/api · /api/v1",
+      "pos": [330, 220],
+      "size": [190, 84]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "AuthMiddleware",
+      "sublabel": "JWT · API Key\n自定义后端",
+      "pos": [330, 40],
+      "size": [190, 62]
+    },
+    {
+      "id": "scheduler",
+      "type": "backend",
+      "label": "Scheduler 主循环",
+      "sublabel": "到期扫描 · 路由\n执行器 / 存储器",
+      "pos": [565, 220],
+      "size": [220, 84]
+    },
+    {
+      "id": "trigger",
+      "type": "backend",
+      "label": "Triggers 触发器",
+      "sublabel": "interval · cron · date\ncalendarinterval · and · or",
+      "pos": [535, 40],
+      "size": [280, 62]
+    },
+    {
+      "id": "executor",
+      "type": "backend",
+      "label": "Executor 执行器",
+      "sublabel": "线程 / 进程 / 异步\n7 种执行器",
+      "pos": [830, 220],
+      "size": [190, 84]
+    },
+    {
+      "id": "workflow",
+      "type": "backend",
+      "label": "Workflow（DAG）",
+      "sublabel": "任务节点 · 条件边\n拓扑分层并行",
+      "tag": "重试 · 超时 · 回调",
+      "pos": [1080, 220],
+      "size": [190, 84]
+    },
+    {
+      "id": "runner",
+      "type": "backend",
+      "label": "Runner 运行器",
+      "sublabel": "python_callable · bash\npython · python_script",
+      "pos": [1040, 40],
+      "size": [270, 62]
+    },
+    {
+      "id": "log",
+      "type": "backend",
+      "label": "ExecutionLog",
+      "sublabel": "节点状态 · 耗时\nstdout / stderr",
+      "pos": [1065, 420],
+      "size": [220, 84]
+    },
+    {
+      "id": "jobstore",
+      "type": "database",
+      "label": "JobStore",
+      "sublabel": "Memory / SQLAlchemy\nRedis / MongoDB",
+      "tag": "Job + 日志持久化",
+      "pos": [555, 420],
+      "size": [240, 84]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "SchedFlow 服务端（单进程 · 轻量）",
+      "wraps": ["api", "auth", "scheduler", "trigger", "executor", "workflow", "runner", "log", "jobstore"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "web-api",
+      "from": "web",
+      "to": "api",
+      "label": "REST 请求 · SSE 状态",
+      "variant": "emphasis",
+      "labelAt": [300, 180]
+    },
+    {
+      "id": "api-sched",
+      "from": "api",
+      "to": "scheduler",
+      "label": "注册 / 启停 / 管理任务",
+      "variant": "emphasis",
+      "labelAt": [543, 180]
+    },
+    {
+      "id": "sched-exec",
+      "from": "scheduler",
+      "to": "executor",
+      "label": "到期任务（executor_alias）",
+      "variant": "emphasis",
+      "labelAt": [808, 180]
+    },
+    {
+      "id": "exec-flow",
+      "from": "executor",
+      "to": "workflow",
+      "label": "执行 Workflow.run()",
+      "labelAt": [1050, 180]
+    },
+    {
+      "id": "sched-jobstore",
+      "from": "scheduler",
+      "to": "jobstore",
+      "label": "add_job · 到期轮询",
+      "labelAt": [675, 360]
+    },
+    {
+      "id": "trigger-sched",
+      "from": "trigger",
+      "to": "scheduler",
+      "label": "到期判定 · next_run_time",
+      "labelAt": [675, 150]
+    },
+    {
+      "id": "auth-api",
+      "from": "auth",
+      "to": "api",
+      "label": "JWT / API Key 校验",
+      "variant": "security",
+      "labelAt": [425, 150]
+    },
+    {
+      "id": "flow-runner",
+      "from": "workflow",
+      "to": "runner",
+      "label": "按 TaskSpec 类型分发",
+      "labelAt": [1175, 160]
+    },
+    {
+      "id": "flow-log",
+      "from": "workflow",
+      "to": "log",
+      "label": "汇总 ExecutionLog",
+      "labelAt": [1175, 360]
+    },
+    {
+      "id": "log-jobstore",
+      "from": "log",
+      "to": "jobstore",
+      "label": "持久化日志",
+      "labelAt": [930, 462]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "主路径",
+      "items": [
+        "用户 / 调用方经 REST / SSE 创建、管理与查看定时工作流",
+        "Scheduler 到期后按 executor_alias 派发，Executor 运行 Workflow DAG",
+        "节点结果汇总为 ExecutionLog，并持久化到 JobStore"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "轻量设计",
+      "items": [
+        "单进程即可运行：API 层与 core 调度栈同进程协作",
+        "内置 MemoryJobStore 与线程 / 进程 / 异步执行器，可零外部依赖起步",
+        "需要时按 jobstore_alias / executor_alias 切换外部实现"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "图中约定与扩展",
+      "items": [
+        "“用户 / 调用方”泛指仓库外的 Web UI、CLI 等接入端",
+        "触发器、执行器、存储器走静态注册表扩展",
+        "认证（JWT / API Key）保护管理与执行接口"
+      ]
+    }
+  ]
+}
