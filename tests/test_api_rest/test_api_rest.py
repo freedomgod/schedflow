@@ -207,3 +207,36 @@ def test_lifespan_starts_scheduler_and_executes_due_jobs():
                 break
             time.sleep(0.05)
         assert logs, "due job should have been executed by the scheduler loop"
+
+
+def test_create_job_with_priority_and_cancel_endpoint():
+    client = make_client()
+    response = client.post(
+        "/api/jobs",
+        json={
+            "workflow": workflow_payload(),
+            "trigger": {"type": "interval", "args": {"seconds": 3600}},
+            "job_id": "cancel-me",
+            "priority": 3,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["priority"] == 3
+
+    # 已存在但未运行/未入队的任务不能被取消。
+    cancelled = client.post("/api/jobs/cancel-me/cancel")
+    assert cancelled.status_code == 409, cancelled.text
+
+
+def test_completed_status_visible_via_api():
+    client = make_client()
+    scheduler = client.app.state.scheduler_api
+    client.post(
+        "/api/jobs",
+        json={"workflow": workflow_payload("done"), "job_id": "done"},
+    )
+    scheduler.get_job("done").status = "completed"
+    scheduler.get_job("done").next_run_time = None
+
+    data = client.get("/api/jobs/done").json()["data"]
+    assert data["status"] == "completed"

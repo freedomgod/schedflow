@@ -109,6 +109,7 @@ class JobCreateRequest(BaseModel):
     misfire_grace_time: int | None = None
     coalesce: bool = True
     max_instances: int = 1
+    priority: int = Field(default=0, ge=0)
     replace: bool = False
 
 
@@ -122,6 +123,7 @@ class JobUpdateRequest(BaseModel):
     misfire_grace_time: int | None = None
     coalesce: bool | None = None
     max_instances: int | None = None
+    priority: int | None = Field(default=None, ge=0)
 
 
 class RescheduleRequest(BaseModel):

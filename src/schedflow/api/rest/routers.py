@@ -59,6 +59,7 @@ def create_job(request: JobCreateRequest, scheduler=Depends(_get_scheduler)):
             misfire_grace_time=request.misfire_grace_time,
             coalesce=request.coalesce,
             max_instances=request.max_instances,
+            priority=request.priority,
             replace=request.replace,
         )
     except JobConflictError as exc:
@@ -125,6 +126,17 @@ def resume_job(job_id: str, scheduler=Depends(_get_scheduler)):
         job = scheduler.resume_job(job_id)
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    return APIResponse(data=job.to_dict())
+
+
+@router.post("/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, scheduler=Depends(_get_scheduler)):
+    try:
+        job = scheduler.cancel_job(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     return APIResponse(data=job.to_dict())
 
 

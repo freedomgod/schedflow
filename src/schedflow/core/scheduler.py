@@ -404,6 +404,7 @@ class Scheduler:
         misfire_grace_time: int | None = None,
         coalesce: bool = True,
         max_instances: int = 1,
+        priority: int = 0,
         replace: bool = False,
     ) -> Job:
         if isinstance(workflow, dict):
@@ -430,6 +431,7 @@ class Scheduler:
             misfire_grace_time=misfire_grace_time,
             coalesce=coalesce,
             max_instances=max_instances,
+            priority=priority,
         )
         store = self.get_jobstore(jobstore_alias)
         with self._lock:
@@ -475,6 +477,7 @@ class Scheduler:
         misfire_grace_time=None,
         coalesce=None,
         max_instances=None,
+        priority=None,
     ) -> Job:
         with self._lock:
             job = self._find_job(job_id)
@@ -512,6 +515,8 @@ class Scheduler:
                 job.coalesce = bool(coalesce)
             if max_instances is not None:
                 job.max_instances = max(1, int(max_instances))
+            if priority is not None:
+                job.priority = max(0, int(priority))
             if job.jobstore_alias != old_alias:
                 old_store = self._jobstores.get(old_alias, self._jobstore)
                 try:

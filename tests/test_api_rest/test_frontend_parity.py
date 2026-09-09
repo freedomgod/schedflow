@@ -150,3 +150,25 @@ def test_jobstore_configuration_persists_and_lists():
             remove_executor_config("parity-store")
         except Exception:  # noqa: BLE001, S110 - cleanup best effort
             pass
+
+
+def test_job_status_and_priority_values_match_frontend_contract():
+    with _client() as client:
+        resp = client.post(
+            "/api/jobs",
+            json={
+                "workflow": _workflow_payload(),
+                "job_id": "status-job",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["priority"] == 0
+        assert data["status"] in {"running", "paused", "completed"}
+
+        scheduler = client.app.state.scheduler
+        scheduler.get_job("status-job").status = "completed"
+        scheduler.get_job("status-job").next_run_time = None
+
+        updated = client.get("/api/jobs/status-job").json()["data"]
+        assert updated["status"] == "completed"
