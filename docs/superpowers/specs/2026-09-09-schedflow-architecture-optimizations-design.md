@@ -110,8 +110,8 @@ SchedFlow 是一个把“一个 Job = 一个 DAG 工作流”的调度框架。�
 
 **RedisJobStore**
 
-- 现状基于扫描；P0 若改动 Redis 存储布局，需要兼容旧 key 布局并做迁移。
-- 列为“可选”：若 P0 时间不允许，Redis 保持现状并写入文档限制说明，不阻塞其他 store。
+- 现状已基于 sorted set（`stores/redis.py` 的 `run_times` key）实现 O(log n) 的
+  `get_due`/`get_next_run_time`，无需改造；P0 只需补充等价测试与文档说明。
 
 **测试要点**
 
@@ -469,8 +469,8 @@ job.run(mode="full", resume_from_log_id=None, timeout=None, cancel_event=None)
 - 修改 `src/schedflow/core/stores/sqlalchemy.py`：`next_run_time` 索引与 SQL
   过滤查询；
 - 修改 `src/schedflow/core/stores/mongodb.py`：`next_run_time` 索引与查询下推；
-- 修改 `src/schedflow/core/stores/redis.py`：到期查询改为排序集（P0 可选，
-  若不做则在该文件注释与文档写明限制）；
+- `src/schedflow/core/stores/redis.py`：已用 sorted set 满足 O(log n)，P0 不改；
+  若后续调整存储布局需先做迁移设计；
 - 修改 `src/schedflow/core/job.py`：新增 `priority`；`Job.status` 支持
   `"completed"`；`to_dict()/from_dict()` 兼容旧数据；
 - 修改 `src/schedflow/core/scheduler.py`：接入 DispatchQueue、`cancel_job()`、
