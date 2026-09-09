@@ -6,7 +6,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from schedflow.core.executor import DebugExecutor
-from schedflow.core.jobstore import JobConflictError, MemoryJobStore
+from schedflow.core.jobstore import (
+    JobConflictError,
+    JobNotFoundError,
+    MemoryJobStore,
+)
 from schedflow.core.scheduler import Scheduler
 from schedflow.core.workflow import Workflow
 from schedflow.triggers import IntervalTrigger
@@ -433,3 +437,49 @@ def test_loop_error_publishes_scheduler_error_event():
 
     assert seen
     assert "loop boom" in seen[0].detail["message"]
+
+
+def test_concurrent_add_and_cancel_no_deadlock():
+    import threading
+
+    scheduler = Scheduler(
+        jobstore=MemoryJobStore(),
+        executor=DebugExecutor(),
+    )
+    errors = []
+
+    def add_jobs(offset: int):
+        try:
+            for index in range(50):
+                scheduler.add_job(
+                    make_workflow(),
+                    trigger=IntervalTrigger(seconds=3600),
+                    job_id=f"j{offset + index}",
+                )
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    def cancel_missing():
+        try:
+            for _ in range(50):
+                try:
+                    scheduler.cancel_job("missing")
+                except JobNotFoundError:
+                    pass
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(exc)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=add_jobs, args=(0,)),
+        threading.Thread(target=cancel_missing),
+        threading.Thread(target=add_jobs, args=(50,)),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(5)
+
+    assert errors == []
+    assert len(scheduler.get_jobs()) == 100

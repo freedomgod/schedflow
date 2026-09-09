@@ -703,7 +703,7 @@ class Scheduler:
     def _main_loop(self) -> None:
         while not self._stop_event.is_set():
             self._main_loop_iteration_for_test()
-            with self._lock:
+            with self._dispatch_lock:
                 next_run = None
                 for jobstore in self._jobstores.values():
                     candidate = jobstore.get_next_run_time()
@@ -736,9 +736,8 @@ class Scheduler:
     def _process_due(self) -> None:
         now = datetime.now(self._timezone)
         due = []
-        with self._lock:
-            for jobstore in self._jobstores.values():
-                due.extend(jobstore.get_due(now))
+        for jobstore in self._jobstores.values():
+            due.extend(jobstore.get_due(now))
         for job in due:
             self._run_due_job(job, now)
 
