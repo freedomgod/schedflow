@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Callable
 from datetime import datetime
@@ -9,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from schedflow.core.log import ExecutionLog, TaskRecord
+
+logger = logging.getLogger(__name__)
 
 
 EVENT_KINDS = frozenset(
@@ -98,5 +101,14 @@ class EventBus:
         for callback in targets:
             try:
                 callback(event)
-            except Exception:  # noqa: BLE001, S110 - listener errors are isolated
-                pass
+            except Exception:
+                listener = (
+                    getattr(callback, "__qualname__", None)
+                    or getattr(callback, "__name__", None)
+                    or repr(callback)
+                )
+                logger.exception(
+                    "event listener error kind=%s listener=%s",
+                    event.kind,
+                    listener,
+                )

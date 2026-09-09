@@ -67,3 +67,19 @@ def test_new_event_kinds_accepted():
     ):
         event = SchedulerEvent(kind, job_id="j1")
         assert event.kind == kind
+
+
+def test_listener_exception_is_logged_not_silent(caplog):
+    import logging
+
+    bus = EventBus()
+
+    def broken(event):
+        raise RuntimeError("listener boom")
+
+    bus.subscribe("job.added", broken)
+    with caplog.at_level(logging.ERROR):
+        bus.publish(SchedulerEvent("job.added", job_id="j1"))
+
+    assert "listener boom" in caplog.text
+    assert "listener" in caplog.text

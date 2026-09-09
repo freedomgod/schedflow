@@ -413,3 +413,23 @@ def test_resume_job_keeps_completed_when_trigger_exhausted():
 
     assert scheduler.get_job("j1").status == "completed"
     assert scheduler.get_job("j1").next_run_time is None
+
+
+def test_loop_error_publishes_scheduler_error_event():
+    scheduler = make_scheduler()
+    scheduler.state = 1  # STATE_RUNNING
+    seen = []
+    scheduler.on("scheduler.error", seen.append)
+
+    def broken_process_due():
+        raise RuntimeError("loop boom")
+
+    original = scheduler._process_due
+    scheduler._process_due = broken_process_due
+    try:
+        scheduler._main_loop_iteration_for_test()
+    finally:
+        scheduler._process_due = original
+
+    assert seen
+    assert "loop boom" in seen[0].detail["message"]

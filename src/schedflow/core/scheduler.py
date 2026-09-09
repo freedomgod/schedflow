@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -23,6 +24,8 @@ from schedflow.core.plugins import EXECUTOR_PLUGINS, JOBSTORE_PLUGINS
 from schedflow.core.workflow import Workflow
 from schedflow.triggers.base import Trigger
 from schedflow.utils import astimezone
+
+LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from schedflow.core.executor import Executor
@@ -699,11 +702,7 @@ class Scheduler:
 
     def _main_loop(self) -> None:
         while not self._stop_event.is_set():
-            if self.state == STATE_RUNNING:
-                try:
-                    self._process_due()
-                except Exception:  # noqa: BLE001, S110 - loop must keep running
-                    pass
+            self._main_loop_iteration_for_test()
             with self._lock:
                 next_run = None
                 for jobstore in self._jobstores.values():
@@ -724,6 +723,15 @@ class Scheduler:
                 )
             self._wakeup_event.clear()
             self._wakeup_event.wait(wait_seconds)
+
+    def _main_loop_iteration_for_test(self) -> None:
+        """Run one due-processing pass with error visibility (loop body)."""
+        if self.state == STATE_RUNNING:
+            try:
+                self._process_due()
+            except Exception as exc:
+                LOGGER.exception("scheduler loop error")
+                self._publish_error(exc, key="main-loop")
 
     def _process_due(self) -> None:
         now = datetime.now(self._timezone)
