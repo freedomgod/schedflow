@@ -22,14 +22,18 @@ EVENT_KINDS = frozenset(
         "job.removed",
         "job.paused",
         "job.resumed",
+        "job.completed",
+        "job.cancelled",
         "job.started",
         "job.succeeded",
         "job.failed",
         "job.missed",
         "job.max_instances",
+        "scheduler.error",
         "task.executed",
         "task.error",
         "task.skipped",
+        "task.cancelled",
     }
 )
 

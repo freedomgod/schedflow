@@ -86,3 +86,23 @@ def test_to_dict_without_trigger():
     assert data["trigger"] is None
     restored = Job.from_dict(data)
     assert restored.trigger is None
+
+
+def test_job_priority_default_and_roundtrip():
+    wf = Workflow("wf")
+    wf.add_task("a", func="os:getcwd")
+    job = Job(wf, None, job_id="p1")
+    assert job.priority == 0
+
+    high = Job(wf, None, job_id="p2", priority=5)
+    restored = Job.from_dict(high.to_dict())
+    assert restored.priority == 5
+
+
+def test_job_completed_status_roundtrip():
+    wf = Workflow("wf")
+    wf.add_task("a", func="os:getcwd")
+    job = Job(wf, None, job_id="c1")
+    job.status = "completed"
+    restored = Job.from_dict(job.to_dict())
+    assert restored.status == "completed"

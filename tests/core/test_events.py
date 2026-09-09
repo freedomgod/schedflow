@@ -56,3 +56,14 @@ def test_listener_error_is_isolated():
     bus.publish(SchedulerEvent("job.added"))
 
     assert seen == ["job.added"]
+
+
+def test_new_event_kinds_accepted():
+    for kind in (
+        "job.completed",
+        "job.cancelled",
+        "scheduler.error",
+        "task.cancelled",
+    ):
+        event = SchedulerEvent(kind, job_id="j1")
+        assert event.kind == kind

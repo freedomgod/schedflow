@@ -104,3 +104,18 @@ class TestExecutionLog:
         assert restored.log_id == log.log_id
         assert restored.records["n1"].result == 42
         assert restored.succeeded is True
+
+
+def test_cancelled_record_and_log_flag():
+    record = TaskRecord(node_id="a", task_id="a")
+    record.mark_cancelled("job_cancelled")
+    assert record.status == "cancelled"
+    assert record.skip_reason == "job_cancelled"
+
+    log = ExecutionLog(flow_id="wf")
+    log.records["a"] = record
+    log.records["b"] = TaskRecord(
+        node_id="b", task_id="b", status="succeeded"
+    )
+    assert log.cancelled is True
+    assert log.succeeded is False

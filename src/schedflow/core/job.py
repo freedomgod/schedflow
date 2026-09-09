@@ -43,6 +43,7 @@ class Job:
         misfire_grace_time: int | None = None,
         coalesce: bool = True,
         max_instances: int = 1,
+        priority: int = 0,
     ) -> None:
         if isinstance(workflow, dict):
             workflow = Workflow.from_dict(workflow)
@@ -64,6 +65,7 @@ class Job:
         self.misfire_grace_time = misfire_grace_time
         self.coalesce = bool(coalesce)
         self.max_instances = max(1, int(max_instances))
+        self.priority = max(0, int(priority))
         self.status: str = "running"
         self.next_run_time: datetime | None = None
         if trigger is not None:
@@ -90,6 +92,7 @@ class Job:
             "misfire_grace_time": self.misfire_grace_time,
             "coalesce": self.coalesce,
             "max_instances": self.max_instances,
+            "priority": self.priority,
             "next_run_time": (
                 self.next_run_time.isoformat()
                 if self.next_run_time is not None
@@ -115,6 +118,7 @@ class Job:
             misfire_grace_time=data.get("misfire_grace_time"),
             coalesce=data.get("coalesce", True),
             max_instances=data.get("max_instances", 1),
+            priority=data.get("priority", 0),
         )
         job.status = data.get("status", "running")
         next_run_time = data.get("next_run_time")

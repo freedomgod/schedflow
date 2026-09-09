@@ -7,7 +7,14 @@ from typing import Any
 
 from schedflow.utils import CustomTypeID
 
-TaskStatus = ("pending", "running", "succeeded", "failed", "skipped")
+TaskStatus = (
+    "pending",
+    "running",
+    "succeeded",
+    "failed",
+    "skipped",
+    "cancelled",
+)
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -86,6 +93,10 @@ class TaskRecord:
         self.status = "skipped"
         self.skip_reason = reason
 
+    def mark_cancelled(self, reason: str = "") -> None:
+        self.status = "cancelled"
+        self.skip_reason = reason
+
     def _update_duration(self) -> None:
         if self.start_time is not None and self.end_time is not None:
             self.duration = (self.end_time - self.start_time).total_seconds()
@@ -158,8 +169,18 @@ class ExecutionLog:
 
     @property
     def succeeded(self) -> bool:
-        """True when no node failed (skipped nodes are not failures)."""
-        return all(record.status != "failed" for record in self.records.values())
+        """True when no node failed or was cancelled."""
+        return all(
+            record.status not in ("failed", "cancelled")
+            for record in self.records.values()
+        )
+
+    @property
+    def cancelled(self) -> bool:
+        return any(
+            record.status == "cancelled"
+            for record in self.records.values()
+        )
 
     @property
     def duration(self) -> float | None:
