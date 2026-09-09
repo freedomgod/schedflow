@@ -41,7 +41,7 @@ EVENT_KINDS = frozenset(
 class SchedulerEvent:
     """A scheduler event with a string kind and optional payload."""
 
-    __slots__ = ("job_id", "kind", "log", "record", "run_time")
+    __slots__ = ("detail", "job_id", "kind", "log", "record", "run_time")
 
     def __init__(
         self,
@@ -51,6 +51,7 @@ class SchedulerEvent:
         run_time: datetime | None = None,
         log: ExecutionLog | None = None,
         record: TaskRecord | None = None,
+        detail: dict | None = None,
     ) -> None:
         if kind not in EVENT_KINDS:
             raise ValueError(
@@ -62,6 +63,7 @@ class SchedulerEvent:
         self.run_time = run_time
         self.log = log
         self.record = record
+        self.detail = detail
 
     def __repr__(self) -> str:
         return f"<SchedulerEvent kind={self.kind!r} job_id={self.job_id!r}>"

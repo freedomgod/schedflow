@@ -110,10 +110,16 @@ def test_due_job_dispatched_after_advance_persists():
     job.next_run_time = run_time
     now = datetime.now(UTC)
 
-    scheduler._run_due_job(job, now)
-
-    assert scheduler._executor.submitted == [run_time]
-    assert scheduler.get_job("j1").next_run_time > now
+    scheduler.start()
+    try:
+        scheduler._run_due_job(job, now)
+        deadline = time.time() + 5
+        while not scheduler._executor.submitted and time.time() < deadline:
+            time.sleep(0.05)
+        assert scheduler._executor.submitted == [run_time]
+        assert scheduler.get_job("j1").next_run_time > now
+    finally:
+        scheduler.shutdown()
 
 
 def test_add_job_explicit_signature():
@@ -341,3 +347,37 @@ def test_run_error_persists_failed_log():
     assert logs and not logs[0].succeeded
     assert logs[0].records["a"].status == "failed"
     assert "boom" in logs[0].records["a"].error
+
+
+def test_cancel_queued_job_does_not_run():
+    scheduler = make_scheduler()
+    seen = []
+    scheduler.on("job.cancelled", seen.append)
+    scheduler.add_job(
+        make_workflow(), trigger=IntervalTrigger(seconds=60), job_id="j1"
+    )
+    job = scheduler.get_job("j1")
+    scheduler._advance(job, job.next_run_time, datetime.now(UTC))
+    scheduler._running["j1"] = 1
+    assert (
+        scheduler._dispatch_queue.put(
+            scheduler.get_job("j1"), datetime.now(UTC)
+        )
+        is True
+    )
+
+    scheduler.cancel_job("j1")
+
+    assert scheduler.get_job("j1") is not None
+    assert "j1" not in scheduler._running
+    assert seen and seen[0].kind == "job.cancelled"
+
+
+def test_cancel_running_job_marks_cancel_event():
+    scheduler = make_scheduler()
+    scheduler.add_job(make_workflow(), job_id="j1")
+    scheduler._running["j1"] = 1
+
+    scheduler.cancel_job("j1")
+
+    assert scheduler._cancel_events["j1"].is_set()

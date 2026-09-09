@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from tzlocal import get_localzone
 
+from schedflow.core.dispatch import DispatchQueue
 from schedflow.core.events import EventBus, SchedulerEvent
 from schedflow.core.executor import ThreadPoolExecutor
 from schedflow.core.job import Job
@@ -65,6 +67,7 @@ class Scheduler:
         timezone=None,
         project_root: str | Path | None = None,
         job_defaults: dict | None = None,
+        dispatch_capacity: int = 10_000,
     ) -> None:
         self._jobstore = jobstore or MemoryJobStore()
         self._executor = executor or ThreadPoolExecutor()
@@ -78,7 +81,12 @@ class Scheduler:
         self._events = EventBus()
         self.state = STATE_STOPPED
         self._lock = threading.RLock()
+        self._dispatch_lock = threading.RLock()
         self._running: dict[str, int] = {}
+        self._cancel_events: dict[str, threading.Event] = {}
+        self._dispatch_queue = DispatchQueue(capacity=dispatch_capacity)
+        self._dispatcher: threading.Thread | None = None
+        self._error_event_logged_at: dict[str, float] = {}
         self._stop_event = threading.Event()
         self._wakeup_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -351,6 +359,23 @@ class Scheduler:
         """Interrupt the main loop's idle wait so it re-scans immediately."""
         self._wakeup_event.set()
 
+    def _publish_error(self, error: Exception, key: str = "default") -> None:
+        """Publish a throttled ``scheduler.error`` event (60s per key)."""
+        now = time.monotonic()
+        last = self._error_event_logged_at.get(key, 0.0)
+        if now - last < 60:
+            return
+        self._error_event_logged_at[key] = now
+        self._events.publish(
+            SchedulerEvent(
+                "scheduler.error",
+                detail={
+                    "error_type": type(error).__name__,
+                    "message": str(error),
+                },
+            )
+        )
+
     def on(self, kind: str, callback: Callable[[SchedulerEvent], None]) -> None:
         """Subscribe to an event kind (see core.events.EVENT_KINDS)."""
         self._events.subscribe(kind, callback)
@@ -537,6 +562,38 @@ class Scheduler:
     def reschedule_job(self, job_id: str, trigger: Trigger) -> Job:
         return self.update_job(job_id, trigger=trigger)
 
+    def cancel_job(self, job_id: str) -> Job:
+        """Cancel a queued or running job (cooperative for running jobs)."""
+        with self._lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise JobNotFoundError(job_id)
+        with self._dispatch_lock:
+            if self._dispatch_queue.cancel(job_id):
+                count = self._running.get(job_id, 1) - 1
+                if count <= 0:
+                    self._running.pop(job_id, None)
+                else:
+                    self._running[job_id] = count
+                queued_cancelled = True
+            elif job_id in self._running:
+                self._cancel_events.setdefault(job_id, threading.Event()).set()
+                queued_cancelled = False
+            else:
+                queued_cancelled = None
+        if queued_cancelled is True:
+            self._events.publish(
+                SchedulerEvent("job.cancelled", job_id=job_id)
+            )
+            return job
+        if queued_cancelled is False:
+            return job
+        raise ValueError(f"Job {job_id!r} is not queued or running")
+
+    def _cancel_event_for(self, job_id: str) -> threading.Event | None:
+        with self._dispatch_lock:
+            return self._cancel_events.get(job_id)
+
     def run_job_now(self, job_id: str, *, max_workers: int = 3) -> ExecutionLog:
         with self._lock:
             job = self._find_job(job_id)
@@ -591,6 +648,12 @@ class Scheduler:
             daemon=True,
         )
         self._thread.start()
+        self._dispatcher = threading.Thread(
+            target=self._dispatch_loop,
+            name="schedflow-dispatch",
+            daemon=True,
+        )
+        self._dispatcher.start()
         self._events.publish(SchedulerEvent("scheduler.started"))
 
     def pause(self) -> None:
@@ -613,6 +676,9 @@ class Scheduler:
         self._wakeup_event.set()
         if self._thread is not None:
             self._thread.join(timeout=10 if wait else 0)
+        self._dispatch_queue.wakeup()
+        if self._dispatcher is not None:
+            self._dispatcher.join(timeout=10 if wait else 0)
         for executor in self._executors.values():
             executor.shutdown(wait=wait)
         self.state = STATE_STOPPED
@@ -668,26 +734,65 @@ class Scheduler:
             )
             self._advance(job, run_time, now)
             return
-        count = self._running.get(job.job_id, 0)
-        if count >= job.max_instances:
-            self._events.publish(
-                SchedulerEvent(
-                    "job.max_instances", job_id=job.job_id, run_time=run_time
-                )
-            )
-            return
         # Persist the next fire time BEFORE dispatching the run. If the store
         # write fails (e.g. transient SQLite lock contention), the exception
         # aborts the dispatch instead of leaving next_run_time in the past,
         # which would otherwise re-fire the job back-to-back and flood the
         # store with executions.
         self._advance(job, run_time, now)
-        self._running[job.job_id] = count + 1
-        self._events.publish(
-            SchedulerEvent("job.started", job_id=job.job_id, run_time=run_time)
-        )
-        executor = self._executors.get(job.executor_alias, self._executor)
-        executor.submit(job, run_time)
+        with self._dispatch_lock:
+            count = self._running.get(job.job_id, 0)
+            if count >= job.max_instances:
+                self._events.publish(
+                    SchedulerEvent(
+                        "job.max_instances",
+                        job_id=job.job_id,
+                        run_time=run_time,
+                    )
+                )
+                return
+            if not self._dispatch_queue.put(job, run_time):
+                self._publish_error(
+                    RuntimeError(
+                        f"dispatch queue full for job {job.job_id!r}"
+                    ),
+                    key=f"queue-full:{job.job_id}",
+                )
+                return
+            self._running[job.job_id] = count + 1
+
+    def _dispatch_loop(self) -> None:
+        while not self._stop_event.is_set():
+            item = self._dispatch_queue.get(timeout=0.5)
+            if item is None:
+                continue
+            job, run_time = item
+            with self._dispatch_lock:
+                cancel_event = self._cancel_events.get(job.job_id)
+                if cancel_event is not None and cancel_event.is_set():
+                    count = self._running.get(job.job_id, 1) - 1
+                    if count <= 0:
+                        self._running.pop(job.job_id, None)
+                        self._cancel_events.pop(job.job_id, None)
+                    else:
+                        self._running[job.job_id] = count
+                    cancelled_before_submit = True
+                else:
+                    cancelled_before_submit = False
+            if cancelled_before_submit:
+                self._events.publish(
+                    SchedulerEvent("job.cancelled", job_id=job.job_id)
+                )
+                continue
+            self._events.publish(
+                SchedulerEvent(
+                    "job.started", job_id=job.job_id, run_time=run_time
+                )
+            )
+            executor = self._executors.get(
+                job.executor_alias, self._executor
+            )
+            executor.submit(job, run_time)
 
     def _advance(self, job: Job, run_time: datetime, now: datetime) -> None:
         store = self._jobstores.get(job.jobstore_alias, self._jobstore)
@@ -717,17 +822,24 @@ class Scheduler:
         log: ExecutionLog | None,
         error: Exception | None = None,
     ) -> None:
-        count = self._running.get(job.job_id, 1) - 1
-        if count <= 0:
-            self._running.pop(job.job_id, None)
-        else:
-            self._running[job.job_id] = count
+        with self._dispatch_lock:
+            count = self._running.get(job.job_id, 1) - 1
+            if count <= 0:
+                self._running.pop(job.job_id, None)
+                self._cancel_events.pop(job.job_id, None)
+            else:
+                self._running[job.job_id] = count
         if log is not None:
             store = self._jobstores.get(job.jobstore_alias, self._jobstore)
             with self._lock:
                 store.add_log(job.job_id, log)
             self._publish_task_events(job.job_id, run_time, log)
-            kind = "job.succeeded" if log.succeeded else "job.failed"
+            if log.cancelled:
+                kind = "job.cancelled"
+            elif log.succeeded:
+                kind = "job.succeeded"
+            else:
+                kind = "job.failed"
             self._events.publish(
                 SchedulerEvent(kind, job_id=job.job_id, run_time=run_time, log=log)
             )
@@ -780,6 +892,8 @@ class Scheduler:
                 kind = "task.error"
             elif record.status == "skipped":
                 kind = "task.skipped"
+            elif record.status == "cancelled":
+                kind = "task.cancelled"
             else:
                 continue
             self._events.publish(
