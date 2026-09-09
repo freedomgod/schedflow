@@ -409,6 +409,8 @@ job.run(mode="full", resume_from_log_id=None, timeout=None, cancel_event=None)
 - `docs/introduction.zh.md`、`docs/user-guide/*`、API 参考随阶段更新；
 - 架构图中的 ExecutionLog/JobStore 说明同步补充“运行快照”职责。
 
+> 注意：§8 只保留契约原则；逐文件的完整更新映射见 §11，§11 是各阶段验收的依据。
+
 ## 9. 测试与验收策略
 
 每个阶段遵循 TDD：先写失败测试，再实现，再全量回归
@@ -450,3 +452,240 @@ job.run(mode="full", resume_from_log_id=None, timeout=None, cancel_event=None)
 - **Redis get_due 优化为可选**：若 P0 排期紧张，Redis 扫描问题会保留并记录限制。
 - **开放问题**：completed job 是否需要区分“用户手动停用”与“单次触发完成”；
   本设计用同一 `completed` 表示“不再按计划启用”，若产品需要区分再扩展。
+
+## 11. 交付物清单与同步范围（完整更新目标）
+
+> 规则：P0/P1/P2 任一阶段落地时，必须按本清单同步更新对应文件，并跑 §11.5 的
+> 验证命令。文档默认中英双语（`docs/*.zh.md` 与 `docs/*.en.md` 成对），以下列表
+> 中“docs 双语”指同时更新两个文件。本清单是实施与验收的权威依据，取代 §8.2/
+> §8.3 的概要描述。
+
+### 11.1 后端源码映射
+
+#### P0 涉及文件
+
+- 修改 `src/schedflow/core/jobstore.py`：`MemoryJobStore` 到期最小堆、
+  `get_due()/get_next_run_time()` 惰性删除与版本号校验；
+- 修改 `src/schedflow/core/stores/sqlalchemy.py`：`next_run_time` 索引与 SQL
+  过滤查询；
+- 修改 `src/schedflow/core/stores/mongodb.py`：`next_run_time` 索引与查询下推；
+- 修改 `src/schedflow/core/stores/redis.py`：到期查询改为排序集（P0 可选，
+  若不做则在该文件注释与文档写明限制）；
+- 修改 `src/schedflow/core/job.py`：新增 `priority`；`Job.status` 支持
+  `"completed"`；`to_dict()/from_dict()` 兼容旧数据；
+- 修改 `src/schedflow/core/scheduler.py`：接入 DispatchQueue、`cancel_job()`、
+  `_advance()` 不再删除而是置 `completed`、主循环异常记录与 `scheduler.error`
+  节流发布、锁拆分、事件发布位置调整；
+- 新增 `src/schedflow/core/dispatch.py`：`DispatchQueue`（优先级/去重/有界/取消）；
+- 修改 `src/schedflow/core/workflow.py`：`run(..., cancel_event=None)` 与节点
+  边界停止检查；
+- 修改 `src/schedflow/core/log.py`：`TaskRecord.status` 支持 `"cancelled"`、
+  `skip_reason="job_cancelled"`；
+- 修改 `src/schedflow/core/events.py`：新增 `job.completed/job.cancelled/
+  scheduler.error`；`publish()` listener 异常记日志；
+- 修改 `src/schedflow/api/rest/routers.py` 与 `src/schedflow/api/rest/schemas.py`：
+  `POST /api/jobs/{id}/cancel`、completed 状态输出、`priority` 入参与响应；
+
+#### P1 涉及文件
+
+- 新增 `src/schedflow/core/snapshot.py`：`RunSnapshot`/`TaskRecordSnapshot` 模型、
+  `Workflow.fingerprint()`、序列化；
+- 修改 `src/schedflow/core/jobstore.py`：JobStore 接口新增
+  `save_snapshot/get_snapshot/list_snapshots/delete_snapshot`；
+- 修改 `src/schedflow/core/jobstore.py`（`MemoryJobStore` 所在文件）、
+  `src/schedflow/core/stores/sqlalchemy.py`、`stores/redis.py`、
+  `stores/mongodb.py`：四种存储的 snapshot 表/集合实现；
+- 修改 `src/schedflow/core/job.py`：新增 `on_restart`、`workflow_timeout`；
+- 修改 `src/schedflow/core/log.py`：`ExecutionLog` 新增 `mode`、`resumes_from`；
+  `TaskRecord` 新增可选 `resumed`；
+- 修改 `src/schedflow/core/workflow.py`：`run(mode=..., resume_from_snapshot=...,
+  timeout=..., cancel_event=...)`、resume 节点结果注入、fingerprint 校验、
+  `DagChangedError`；
+- 修改 `src/schedflow/core/scheduler.py`：`run_job_now()`/调度执行传递 mode 与
+  timeout；`start()` 时扫描遗留 running 快照并按 `on_restart` 恢复；
+- 修改 `src/schedflow/api/rest/routers.py` 与 `schemas.py`：
+  `POST /api/jobs/{id}/run` 支持 `mode`；新增
+  `GET /api/jobs/{id}/runs`；运行概览含 snapshot-only；
+- 修改 `src/schedflow/api/exceptions.py`：`DagChangedError` → 409、无快照 → 409；
+- 修改 `src/schedflow/core/events.py`：新增 `job.recovered` 等事件种类（按实现
+  需要）。
+
+#### P2 涉及文件
+
+- 新增 `src/schedflow/core/webhook.py`：`WebhookEventSink`（有界队列、重试、
+  secret header、序列化）；
+- 新增 `src/schedflow/core/metrics.py`：最小 registry（Counter/Gauge/Histogram）
+  与文本导出；
+- 修改 `src/schedflow/core/events.py`：listener 失败计数接入 metrics；
+- 修改 `src/schedflow/core/scheduler.py`：关键路径埋点（job 计数、执行耗时、
+  队列深度、主循环错误）；
+- 修改 `src/schedflow/api/rest/routers.py`：注册 `GET /api/metrics`；
+- 修改 `src/schedflow/api/routers/sse.py`：新增 job 执行状态事件流与快照回放；
+- 修改 `src/schedflow/api/middleware.py`：进程内 token bucket 限流；
+- 修改 `src/schedflow/api/routers/settings.py` 与 `src/schedflow/api/rest/
+  schemas.py`：webhook 订阅、限流开关与参数的持久化 settings；
+- 新增 `src/schedflow/utils/logging.py`：JSON formatter 与
+  `SCHEDFLOW_LOG_FORMAT=json` 支持。
+
+### 11.2 测试文件映射
+
+#### P0
+
+- 修改 `tests/core/test_jobstore.py`：堆语义、惰性删除、FIFO 稳定；
+- 新增 `tests/core/test_jobstore_scale.py`：10k job 的 `get_due/
+  get_next_run_time` 基准断言（宽松阈值）；
+- 修改 `tests/core/test_stores.py`：SQLAlchemy 索引查询；Redis/MongoDB 行为
+  等价（外部服务不可用时保持自动跳过）；
+- 新增 `tests/core/test_dispatch.py`：优先级/FIFO/去重/有界/取消；
+- 修改 `tests/core/test_scheduler.py`：completed 保留、cancel、错误事件、
+  锁拆分并发；
+- 修改 `tests/core/test_workflow.py`：`cancel_event` 节点边界停止；
+- 修改 `tests/core/test_log.py`：`cancelled` 记录序列化；
+- 修改 `tests/core/test_events.py`：listener 异常日志、新事件种类；
+- 修改 `tests/test_api_rest/test_api_rest.py`：cancel/completed 端点；
+- 修改 `tests/test_api_rest/test_frontend_parity.py`：Job/TaskRecord 新状态与
+  字段契约。
+
+#### P1
+
+- 新增 `tests/core/test_snapshot.py`：快照 CRUD、fingerprint 稳定性/敏感性、
+  full/resume 单元行为；
+- 修改 `tests/core/test_stores.py`：四种 store 的 snapshot 增删查与运行标记；
+- 修改 `tests/core/test_workflow.py`：resume 跳过 succeeded、保留 result 注入、
+  DAG 变更拒绝、`workflow_timeout` 停止派发；
+- 修改 `tests/core/test_scheduler.py`：启动恢复扫描与 `on_restart=none|resume|
+  rerun`；
+- 修改 `tests/core/test_log.py`：`mode/resumes_from/resumed` 序列化与旧数据
+  兼容；
+- 修改 `tests/test_api_rest/test_api_rest.py`：run mode、runs 概览、409 错误；
+- 修改 `tests/test_api_rest/test_frontend_parity.py`：run/mode/resumes_from 等
+  契约；
+- 修改 `tests/test_api/test_sse.py`：运行中状态推送（P1 若先落地运行中查询，
+  SSE 部分在 P2 补）。
+
+#### P2
+
+- 新增 `tests/core/test_webhook.py`：配置解析、队列投递、重试、失败计数；
+- 新增 `tests/core/test_metrics.py`：registry 与 Prometheus 文本格式；
+- 修改 `tests/core/test_events.py`：listener 错误指标；
+- 修改 `tests/test_api/test_middleware.py`：限流 429 与 Retry-After；
+- 修改 `tests/test_api/test_sse.py`：job 状态事件流与回放；
+- 修改 `tests/test_api/test_schemas.py`/`test_settings.py`（如存在）：
+  webhook/限流 settings 校验；
+- 修改 `tests/test_api_rest/test_frontend_parity.py`：新端点/字段的最终契约。
+
+### 11.3 前端文件映射（`frontend/`，Vue 3 + TS）
+
+#### P0
+
+- 修改 `frontend/src/types/job.ts`：`Job.status` 支持 `completed`；新增
+  `priority`；`TaskRecord.status` 支持 `cancelled`；请求/响应类型；
+- 修改 `frontend/src/types/api.ts`、`frontend/src/types/index.ts`：导出新类型；
+- 修改 `frontend/src/api/jobs.ts`：`cancelJob()`、创建/编辑传 `priority`；
+- 修改 `frontend/src/api/mappers.ts`：状态文案/颜色加入 `completed`、
+  `cancelled`；
+- 修改 `frontend/src/views/jobs/JobForm.vue`：priority 输入；
+- 修改 `frontend/src/views/jobs/JobList.vue`：completed 徽标、取消/运行操作；
+- 修改 `frontend/src/views/jobs/JobDetail.vue`：取消按钮与状态展示；
+- 修改 `frontend/src/views/logs/ExecutionOutput.vue`（及共用节点状态组件）：
+  cancelled 节点标记。
+
+#### P1
+
+- 修改 `frontend/src/types/job.ts`：`Job.on_restart/workflow_timeout`；
+  `ExecutionLog.mode/resumes_from`；`TaskRecord.resumed`；运行概览
+  `RunSummary` 类型；
+- 修改 `frontend/src/api/jobs.ts`：`runJob(jobId, {mode})`；
+- 修改 `frontend/src/api/logs.ts`：获取运行概览
+  `GET /api/jobs/{id}/runs`、运行中快照视图；
+- 修改 `frontend/src/api/mappers.ts`：resumes_from 链、snapshot-only、
+  resumed 标记映射；
+- 修改 `frontend/src/views/jobs/JobForm.vue`：`on_restart` 选择与
+  `workflow_timeout` 输入；
+- 修改 `frontend/src/views/jobs/JobDetail.vue`：full/resume 执行入口、
+  不兼容/无快照错误提示、运行历史链；
+- 修改 `frontend/src/views/logs/ExecutionList.vue`、`JobLogs.vue`、
+  `JobLogViewer.vue`：显示 mode、resumes_from、恢复节点；
+- 修改 `frontend/src/views/logs/ExecutionOutput.vue`：运行中部分记录与
+  resumed 徽标。
+
+#### P2
+
+- 新增 `frontend/src/composables/useJobSse.ts`：订阅 job 执行状态事件；
+- 修改 `frontend/src/views/jobs/JobDetail.vue` 与
+  `frontend/src/views/logs/ExecutionOutput.vue`：接入 SSE 实时节点/运行状态；
+- 新增 `frontend/src/views/settings/WebhookSettings.vue`：webhook 订阅配置；
+- 修改 `frontend/src/api/settings.ts` 与 `frontend/src/types/`：webhook/限流
+  settings 类型与 API；
+- 修改 `frontend/src/router/index.ts`、`components/layout/AppSidebar.vue`：
+  注册 WebhookSettings 页面；
+- 修改 `frontend/src/views/settings/SystemSettings.vue`：限流开关入口（按需）；
+- Dashboard 指标卡不列为必须项；若产品决定接入 `/api/metrics` 再追加任务。
+
+### 11.4 文档与示例映射
+
+#### P0
+
+- `docs/user-guide/core-features.zh.md/.en.md`：Job 管理章节补充 `priority`、
+  `cancel_job`、`completed` 状态与“一次性任务保留不删除”行为；
+- `docs/user-guide/dag-workflow.zh.md/.en.md`：协作式取消与 `cancelled` 记录
+  说明；
+- `docs/api-reference/index.zh.md/.en.md`：cancel/completed/priority 的请求
+  响应字段；
+- `docs/index.zh.md/.en.md`：核心特性表补充优先级/取消/一次性任务保留；
+- `CHANGELOG.md` 与 `docs/changelog.zh.md/.en.md`：P0 条目；
+- `README.md`/`README_EN.md`（如特性清单处涉及 Job 管理）。
+
+#### P1
+
+- `docs/introduction.zh.md/.en.md`：架构/数据流补充 full/resume、运行快照职责；
+- `docs/images/schedflow-architecture.json` 与
+  `docs/images/schedflow-architecture.html`：更新 ExecutionLog/JobStore 卡片
+  文案以说明运行快照与恢复（经 archify validate/deliver 重出）；
+- `docs/user-guide/core-features.zh.md/.en.md`：`on_restart`、
+  `workflow_timeout`、runs 概览；
+- `docs/user-guide/dag-workflow.zh.md/.en.md`：`run(mode/resume/timeout)`、
+  fingerprint 与恢复限制；
+- `docs/user-guide/advanced-usage.zh.md/.en.md`：断点续跑场景与自动恢复策略
+  章节；
+- `docs/api-reference/index.zh.md/.en.md`：run body、runs 端点、日志新字段；
+- 新增 `examples/resume_execution_example.py`，并在 `examples/README.md` 登记；
+- `CHANGELOG.md` 与 `docs/changelog.zh.md/.en.md`：P1 条目。
+
+#### P2
+
+- `docs/installation.zh.md/.en.md`：`SCHEDFLOW_LOG_FORMAT=json` 与限流/指标
+  配置；
+- `docs/user-guide/core-features.zh.md/.en.md`：可观测性小节（/metrics、SSE、
+  webhook、结构化日志、限流）；
+- `docs/user-guide/advanced-usage.zh.md/.en.md`：webhook 配置示例；
+- `docs/api-reference/index.zh.md/.en.md`：`/api/metrics`、SSE 事件流、429 响应；
+- `docs/index.zh.md/.en.md`：核心特性表可观测性行；
+- `CHANGELOG.md` 与 `docs/changelog.zh.md/.en.md`：P2 条目。
+
+### 11.5 验证命令
+
+每个阶段交付前必须通过：
+
+```bash
+python -m pytest
+ruff check .
+cd frontend && npm run type-check && npm run build
+```
+
+文档与架构图变更后：
+
+```bash
+python -m mkdocs build --strict   # 本机安装 mkdocs 依赖时执行
+node "C:\Users\WWH\.agents\skills\archify\bin\archify.mjs" validate architecture docs/images/schedflow-architecture.json --quality showcase --json
+node "C:\Users\WWH\.agents\skills\archify\bin\archify.mjs" deliver architecture docs/images/schedflow-architecture.json docs/images/schedflow-architecture.html --quality showcase --json
+```
+
+### 11.6 完成标准（DoD）
+
+- 后端：本阶段功能实现并有对应测试，`pytest`/`ruff` 全绿；
+- 契约：`test_frontend_parity.py` 与后端 schema 同步更新并通过；
+- 前端：类型检查与构建通过，涉及页面交互完成；
+- 文档：11.4 中该阶段文件全部更新（zh/en）；
+- 记录：`CHANGELOG.md` 与站点 changelog 更新；
+- 提交：后端、测试、前端、文档按任务粒度分次提交，禁用大杂烩 commit。
