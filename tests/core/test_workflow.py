@@ -266,3 +266,57 @@ def test_validate_passes_for_valid_workflow():
     wf.add_task("b", func=lambda: 2)
     wf.add_edge("a", "b")
     wf.validate()
+
+
+def test_run_cancel_stops_after_generation_boundary():
+    import threading
+
+    wf = Workflow("cancel")
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocker():
+        entered.set()
+        release.wait(2)
+        return "ok"
+
+    wf.add_task("slow", func=blocker)
+    wf.add_task("later", func=lambda: 1)
+    wf.add_edge("slow", "later")
+    cancel_event = threading.Event()
+
+    def cancel_soon():
+        entered.wait(2)
+        cancel_event.set()
+
+    canceller = threading.Thread(target=cancel_soon)
+    canceller.start()
+    try:
+        log = wf.run(max_workers=1, cancel_event=cancel_event)
+    finally:
+        release.set()
+        canceller.join(2)
+
+    assert log.records["slow"].status == "succeeded"
+    assert log.records["later"].status == "cancelled"
+    assert log.cancelled is True
+    assert log.succeeded is False
+
+
+def test_run_cancel_event_set_before_start_marks_all_cancelled():
+    import threading
+
+    wf = Workflow("cancel-all")
+    wf.add_task("a", func=lambda: 1)
+    wf.add_task("b", func=lambda: 2)
+    wf.add_edge("a", "b")
+
+    event = threading.Event()
+    event.set()
+    log = wf.run(cancel_event=event)
+
+    assert log.cancelled is True
+    assert all(
+        record.status == "cancelled"
+        for record in log.records.values()
+    )

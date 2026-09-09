@@ -184,6 +184,7 @@ class Workflow:
         max_workers: int = 3,
         executor: str = "thread",
         inputs: dict | None = None,
+        cancel_event=None,
     ) -> ExecutionLog:
         """Execute the workflow directly (without a scheduler).
 
@@ -207,14 +208,26 @@ class Workflow:
         }
 
         for generation in self._generations():
+            if cancel_event is not None and cancel_event.is_set():
+                self._mark_pending_cancelled(log)
+                break
             self._execute_generation(
                 generation,
                 log=log,
                 max_workers=max_workers,
                 inputs=inputs or {},
+                cancel_event=cancel_event,
             )
+            if cancel_event is not None and cancel_event.is_set():
+                self._mark_pending_cancelled(log)
+                break
         log.finalize()
         return log
+
+    def _mark_pending_cancelled(self, log: ExecutionLog) -> None:
+        for record in log.records.values():
+            if record.status == "pending":
+                record.mark_cancelled("job_cancelled")
 
     def _snapshot(self) -> dict:
         """Best-effort DAG snapshot for execution logs.
@@ -242,12 +255,16 @@ class Workflow:
         log: ExecutionLog,
         max_workers: int,
         inputs: dict,
+        cancel_event=None,
     ) -> None:
         futures: dict[concurrent.futures.Future, str] = {}
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=max_workers
         ) as pool:
             for node_id in generation:
+                if cancel_event is not None and cancel_event.is_set():
+                    log.records[node_id].mark_cancelled("job_cancelled")
+                    continue
                 if not self._check_preconditions(node_id, log):
                     reason = self._skip_reason(node_id, log)
                     log.records[node_id].mark_skipped(reason)
