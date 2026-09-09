@@ -314,6 +314,9 @@ def test_missed_job_publishes_event():
         misfire_grace_time=1,
     )
     job.next_run_time = datetime.now(UTC) - timedelta(seconds=30)
+    # The store keeps an indexed due-time snapshot; refresh it after mutating
+    # the run time so the scheduler's due scan sees the stale run.
+    scheduler.get_jobstore("default").update(job)
     scheduler.start()
     try:
         deadline = time.time() + 5

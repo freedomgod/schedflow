@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import heapq
+import itertools
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -61,37 +63,82 @@ class JobStore(ABC):
 
 
 class MemoryJobStore(JobStore):
-    """In-memory job store (volatile)."""
+    """In-memory job store (volatile) with an O(log n) due-time heap."""
 
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
         self._logs: dict[str, list[ExecutionLog]] = {}
+        self._heap: list[tuple] = []
+        self._versions: dict[str, int] = {}
+        self._counter = itertools.count()
+
+    def _push_scheduled(self, job: Job) -> None:
+        if job.next_run_time is None:
+            return
+        version = self._versions[job.job_id]
+        heapq.heappush(
+            self._heap,
+            (
+                job.next_run_time,
+                next(self._counter),
+                job.job_id,
+                version,
+            ),
+        )
+
+    def _clean_heap(self) -> None:
+        while self._heap:
+            _, _, job_id, version = self._heap[0]
+            job = self._jobs.get(job_id)
+            if (
+                job is not None
+                and job.next_run_time is not None
+                and version == self._versions.get(job_id)
+            ):
+                return
+            heapq.heappop(self._heap)
 
     def add(self, job: Job) -> None:
         if job.job_id in self._jobs:
             raise JobConflictError(job.job_id)
         self._jobs[job.job_id] = job
+        self._versions[job.job_id] = self._versions.get(job.job_id, 0) + 1
+        self._push_scheduled(job)
 
     def update(self, job: Job) -> None:
         if job.job_id not in self._jobs:
             raise JobNotFoundError(job.job_id)
         self._jobs[job.job_id] = job
+        self._versions[job.job_id] = self._versions.get(job.job_id, 0) + 1
+        self._push_scheduled(job)
 
     def remove(self, job_id: str) -> None:
         if job_id not in self._jobs:
             raise JobNotFoundError(job_id)
         del self._jobs[job_id]
+        self._versions[job_id] = self._versions.get(job_id, 0) + 1
 
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
 
     def get_due(self, now: datetime) -> list[Job]:
-        due = [
-            job
-            for job in self._jobs.values()
-            if job.next_run_time is not None and job.next_run_time <= now
-        ]
-        return sorted(due, key=lambda job: job.next_run_time)
+        self._clean_heap()
+        due: list[Job] = []
+        while self._heap:
+            run_time, _, job_id, version = self._heap[0]
+            if run_time > now:
+                break
+            job = self._jobs.get(job_id)
+            if (
+                job is None
+                or version != self._versions.get(job_id)
+                or job.next_run_time != run_time
+            ):
+                heapq.heappop(self._heap)
+                continue
+            heapq.heappop(self._heap)
+            due.append(job)
+        return due
 
     def get_all(self) -> list[Job]:
         scheduled = sorted(
@@ -102,12 +149,10 @@ class MemoryJobStore(JobStore):
         return scheduled + paused
 
     def get_next_run_time(self) -> datetime | None:
-        candidates = [
-            job.next_run_time
-            for job in self._jobs.values()
-            if job.next_run_time is not None
-        ]
-        return min(candidates) if candidates else None
+        self._clean_heap()
+        if not self._heap:
+            return None
+        return self._heap[0][0]
 
     def add_log(self, job_id: str, log: ExecutionLog) -> None:
         self._logs.setdefault(job_id, []).append(log)
@@ -124,3 +169,5 @@ class MemoryJobStore(JobStore):
     def close(self) -> None:
         self._jobs.clear()
         self._logs.clear()
+        self._heap.clear()
+        self._versions.clear()

@@ -131,3 +131,60 @@ def test_job_with_unresolvable_ref_is_kept():
     assert store.get("j-ref").workflow.to_dict()["nodes"][0]["task"]["ref"] == (
         "missing_module_xyz:fn"
     )
+
+
+def test_get_due_ignores_stale_heap_entries_after_update():
+    """Rescheduling a job must not let the old run time fire again."""
+    store = make_store()
+    now = datetime.now(UTC)
+    job = make_job("j1")
+    job.next_run_time = now - timedelta(seconds=1)
+    store.add(job)
+
+    job.next_run_time = now + timedelta(hours=1)
+    store.update(job)
+
+    assert store.get_due(now) == []
+    assert store.get_next_run_time() == job.next_run_time
+
+
+def test_get_due_removes_job_after_remove():
+    store = make_store()
+    now = datetime.now(UTC)
+    job = make_job("j1")
+    job.next_run_time = now - timedelta(seconds=1)
+    store.add(job)
+    store.remove("j1")
+
+    assert store.get_due(now) == []
+    assert store.get_next_run_time() is None
+
+
+def test_get_due_fifo_for_same_run_time():
+    """Jobs due at the same instant keep insertion order."""
+    store = make_store()
+    now = datetime.now(UTC)
+    first = make_job("first")
+    first.next_run_time = now
+    second = make_job("second")
+    second.next_run_time = now
+    store.add(first)
+    store.add(second)
+
+    assert [job.job_id for job in store.get_due(now)] == ["first", "second"]
+
+
+def test_due_lookup_uses_internal_run_time_index():
+    """get_due/get_next_run_time must read the due-time index, not scan jobs."""
+    store = make_store()
+    now = datetime.now(UTC)
+    future = make_job("future")
+    future.next_run_time = now + timedelta(hours=2)
+    store.add(future)
+
+    # A linear-scan implementation re-reads _jobs; the indexed implementation
+    # answers from the heap without touching the live job dict.
+    store.get_due(now)
+    store.get_next_run_time()
+    assert hasattr(store, "_heap")
+    assert [entry[2] for entry in store._heap] == ["future"]
