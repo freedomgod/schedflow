@@ -140,6 +140,14 @@ wf.add_edge("check", "next", condition=should_continue)
 
 条件不满足时，目标节点标记为 `skipped` 并记录 `skip_reason`。前置节点失败同样会导致下游 `skipped`；不受影响的并行分支继续执行。若整个工作流没有任何节点 `failed`，`log.succeeded` 为 `True`（`skipped` 不视为失败）。
 
+## 协作式取消（cancel_event）
+
+`Workflow.run(..., cancel_event=...)` 接受一个可选 `threading.Event`。事件在
+**拓扑层边界**被检查：当前层节点正常结束后，若事件已置位则不再派发后续节点，
+未执行节点记录为 `cancelled`（`skip_reason="job_cancelled"`），整次执行的
+`ExecutionLog.succeeded` 为 `False`、`log.cancelled` 为 `True`。正在运行的节点
+不做强制中断。
+
 ## 重试、超时与回调
 
 ```python

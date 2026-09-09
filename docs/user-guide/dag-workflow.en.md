@@ -140,6 +140,14 @@ wf.add_edge("check", "next", condition=should_continue)
 
 When a condition is not met, the target node is marked `skipped` with a `skip_reason`. A failed predecessor also causes downstream nodes to be skipped; unaffected parallel branches keep running. If no node is `failed`, `log.succeeded` is `True` (`skipped` is not a failure).
 
+## Cooperative cancellation (cancel_event)
+
+`Workflow.run(..., cancel_event=...)` accepts an optional `threading.Event`. It is
+checked at **topological-layer boundaries**: after the current layer finishes, no
+further nodes are dispatched once the event is set; pending nodes become
+`cancelled` (`skip_reason="job_cancelled"`), so `ExecutionLog.succeeded` is `False`
+and `log.cancelled` is `True`. Nodes already running are never force-interrupted.
+
 ## Retries, timeouts and callbacks
 
 ```python

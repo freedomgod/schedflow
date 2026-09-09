@@ -26,6 +26,7 @@ New code imports from `schedflow.core`, `schedflow.triggers` and `schedflow.api.
 | **DAG workflows** | `Workflow`: nodes (`add_task`) + dependency edges (`add_edge`) with cycle detection, topological execution and same-layer parallelism |
 | **Task types** | `python_callable` (a callable or `"module:function"` string), `python` (`.py` script), `python_script` (inline code), `bash` (shell command) |
 | **Explicit API** | Explicit keyword signatures; string references are resolved lazily at execution time |
+| **Job management** | Priority dispatch, cooperative cancellation, and one-shot jobs kept as `completed` instead of deleted |
 | **Triggers** | `DateTrigger`, `IntervalTrigger`, `CronTrigger`, `CalendarIntervalTrigger`, `AndTrigger`, `OrTrigger`; unified `to_dict()/from_dict()` |
 | **Persistence** | `MemoryJobStore`, `SQLAlchemyJobStore`, `RedisJobStore`, `MongoDBJobStore`; JSON-only serialization, references never resolved on load |
 | **Executors** | `ThreadPoolExecutor`, `ProcessPoolExecutor` (JSON worker protocol, Windows-ready), `DebugExecutor` |

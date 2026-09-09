@@ -26,6 +26,7 @@ SchedFlow 把传统“一个 Job = 一次函数调用”的定时任务模型升
 | **DAG 工作流** | `Workflow`：`add_task()` 定义节点、`add_edge()` 定义依赖边，内置环路检测、拓扑排序执行、同层并行 |
 | **任务类型** | `python_callable`（可调用对象或 `"模块:函数"` 字符串）、`python`（`.py` 脚本）、`python_script`（内联代码）、`bash`（Shell 命令） |
 | **显式 API** | 全部显式关键字签名；字符串引用只在执行时解析 |
+| **作业管理** | 优先级派发、协作式取消、单次任务执行后保留为 `completed`（不再删除） |
 | **触发器** | `DateTrigger`、`IntervalTrigger`、`CronTrigger`、`CalendarIntervalTrigger`、`AndTrigger`、`OrTrigger`；统一 `to_dict()/from_dict()` |
 | **持久化** | `MemoryJobStore`、`SQLAlchemyJobStore`、`RedisJobStore`、`MongoDBJobStore`；纯 JSON 序列化，反序列化不解析引用 |
 | **执行器** | `ThreadPoolExecutor`、`ProcessPoolExecutor`（JSON worker 协议，Windows 可用）、`DebugExecutor` |

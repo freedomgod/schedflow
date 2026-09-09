@@ -218,6 +218,29 @@ scheduler.reschedule_job("my_job", CronTrigger(hour=3))
 log = scheduler.run_job_now("my_job")     # run once immediately, ignoring the trigger
 ```
 
+### Priority and cancellation
+
+```python
+job = scheduler.add_job(
+    workflow, trigger=IntervalTrigger(seconds=60), job_id="my_job", priority=1
+)
+
+scheduler.cancel_job("my_job")
+```
+
+- `priority` (default `0`; lower values dispatch first) only orders scheduler
+  dispatch and preserves FIFO behavior for ties;
+- `cancel_job` removes a job that has not started yet; running jobs are cancelled
+  **cooperatively** — after the current node finishes, no further nodes are
+  dispatched, pending nodes become `cancelled`, and a `job.cancelled` event fires.
+
+### One-shot jobs (completed)
+
+After a `DateTrigger` (or any exhausted trigger) fires, the job is **not removed**:
+its status becomes `completed`, `next_run_time` is cleared and the job stays in the
+JobStore. History remains visible; you may delete it explicitly or run it again
+with `run_job_now`. Only an explicit `reschedule_job` with a new trigger re-enables it.
+
 ### Execution logs
 
 ```python

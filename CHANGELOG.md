@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **优先级与协作式取消**：`Job.priority` 决定派发顺序；`cancel_job` /
+  `POST /api/jobs/{id}/cancel` 取消未开始任务，运行中任务在节点边界协作式停止；
+- **一次性任务保留**：单次触发器耗尽后任务置为 `completed` 并保留，不再自动删除；
+- **调度可靠性**：Memory/SQLAlchemy/MongoDB 到期查询改为索引结构；主循环与
+  EventBus 监听器异常可见化。
+
 ## 0.0.1 (2026-08-08)
 
 ### Added

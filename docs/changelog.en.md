@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Priority and cooperative cancellation**: `Job.priority` orders dispatch;
+  `cancel_job` / `POST /api/jobs/{id}/cancel` cancels queued jobs, and running
+  jobs stop cooperatively at node boundaries with a `job.cancelled` event;
+- **One-shot retention**: exhausted one-shot jobs become `completed` and stay in
+  the store instead of being removed automatically;
+- **Scheduler reliability**: Memory/SQLAlchemy/MongoDB due-time lookups use
+  indexed structures, and scheduler/event-listener errors are no longer silent;
 - **`Workflow`**: build DAGs with `add_task()/add_edge()`; topological generation-based parallelism, conditional edges, cycle detection (`CycleError`), `_pre_results` injection, retries/timeouts/callbacks, and `to_dict()/from_dict()` as the single JSON serialization path;
 - **`TaskSpec`**: four task types `python_callable` / `python` / `python_script` / `bash`, with subprocess env/cwd/timeout support;
 - **`ExecutionLog` / `TaskRecord`**: structured execution logs with per-node status, result, error, stdout/stderr, exit code and duration;

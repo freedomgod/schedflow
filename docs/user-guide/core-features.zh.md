@@ -224,6 +224,26 @@ scheduler.reschedule_job("my_job", CronTrigger(hour=3))
 log = scheduler.run_job_now("my_job")     # 无视触发器立即执行一次
 ```
 
+### 优先级与取消
+
+```python
+job = scheduler.add_job(
+    workflow, trigger=IntervalTrigger(seconds=60), job_id="my_job", priority=1
+)
+
+scheduler.cancel_job("my_job")
+```
+
+- `priority`（默认 `0`，越小越先执行）只影响 Scheduler 派发顺序，不改变既有 FIFO 语义；
+- `cancel_job` 可取消尚未开始的任务；对运行中任务采用**协作式取消**——当前节点跑完后
+  不再派发后续节点，未执行节点记录为 `cancelled`，并发布 `job.cancelled` 事件。
+
+### 一次性任务（completed）
+
+`DateTrigger` 等单次触发器执行完毕后任务**不会删除**：状态变为 `completed`、
+`next_run_time` 置空并保留在 JobStore。用户可继续查看历史日志，也可显式删除或通过
+`run_job_now` 手动重跑；只有显式 `reschedule_job` 传入新触发器才会重新启用。
+
 ### 执行日志
 
 ```python

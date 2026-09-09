@@ -2,6 +2,14 @@
 
 本部分通过 `mkdocstrings` 直接从 Python 源码 docstring 生成 API 文档，对应项目的**公开接口**。用户侧只需关注 `schedflow.core`、`schedflow.triggers` 与 `schedflow.api.rest`。
 
+## P0 行为说明（优先级 / 取消 / 一次性任务）
+
+- `Job` 新增 `priority`（默认 `0`，越小越先派发）；
+- 新增 `POST /api/jobs/{job_id}/cancel`：未入队/未运行返回 409，未找到返回 404；
+- `Job.status` 支持 `completed`：date 等单次触发器耗尽后任务保留并停止调度，
+  不再自动删除；
+- `POST /api/jobs` / `PUT /api/jobs/{job_id}` 接受 `priority` 字段。
+
 ## 核心对象（schedflow.core）
 
 ### 工作流（Workflow）

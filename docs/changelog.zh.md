@@ -4,6 +4,11 @@
 
 ### 新增
 
+- **优先级与协作式取消**：`Job.priority` 决定派发顺序；`cancel_job`/`POST /api/jobs/{id}/cancel`
+  取消未开始任务，运行中任务在节点边界协作式停止并发布 `job.cancelled`；
+- **一次性任务保留**：单次触发器执行完成后任务置为 `completed` 并保留在存储中，不再自动删除；
+- **调度可靠性**：Memory/SQLAlchemy/MongoDB 到期查询改为索引结构，主循环错误与事件监听器
+  异常不再静默吞掉；
 - **`Workflow`**：以 `add_task()/add_edge()` 构建 DAG，支持拓扑分层并行、条件边、环路检测（`CycleError`）、`_pre_results` 注入、重试/超时/回调，`to_dict()/from_dict()` 作为唯一 JSON 序列化出口；
 - **`TaskSpec`**：四种任务类型 `python_callable` / `python` / `python_script` / `bash`，子进程任务支持环境变量、工作目录、超时；
 - **`ExecutionLog` / `TaskRecord`**：结构化执行日志，记录每个节点的状态、结果、错误、stdout/stderr、退出码与耗时；
