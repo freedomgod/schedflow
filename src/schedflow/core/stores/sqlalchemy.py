@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 from schedflow.core.job import Job
 from schedflow.core.jobstore import (
@@ -56,6 +56,8 @@ class SQLAlchemyJobStore(JobStore):
             self._metadata,
             sa.Column("id", sa.String(191), primary_key=True),
             sa.Column("job_json", sa.Text, nullable=False),
+            sa.Column("next_run_utc", sa.String(64), nullable=True),
+            sa.Index("ix_jobs_next_run_utc", "next_run_utc"),
         )
         self.logs = sa.Table(
             "job_logs",
@@ -65,8 +67,47 @@ class SQLAlchemyJobStore(JobStore):
             sa.Column("log_json", sa.Text, nullable=False),
         )
 
+    @staticmethod
+    def _next_run_utc(job: Job) -> str | None:
+        if job.next_run_time is None:
+            return None
+        return job.next_run_time.astimezone(UTC).isoformat()
+
     def _ensure(self) -> None:
         self._metadata.create_all(self._engine, checkfirst=True)
+        inspector = sa.inspect(self._engine)
+        columns = {
+            column["name"] for column in inspector.get_columns("jobs")
+        }
+        if "next_run_utc" not in columns:
+            with self._engine.begin() as connection:
+                connection.execute(
+                    sa.text(
+                        "ALTER TABLE jobs ADD COLUMN next_run_utc VARCHAR(64)"
+                    )
+                )
+        sa.Index(
+            "ix_jobs_next_run_utc", self.jobs.c.next_run_utc
+        ).create(self._engine, checkfirst=True)
+        self._backfill_next_run_utc()
+
+    def _backfill_next_run_utc(self) -> None:
+        """Populate next_run_utc for rows written before the column existed."""
+        with self._engine.connect() as connection:
+            rows = connection.execute(
+                sa.select(self.jobs.c.id, self.jobs.c.job_json).where(
+                    self.jobs.c.next_run_utc.is_(None)
+                )
+            ).all()
+        for job_id, raw in rows:
+            job = Job.from_dict(json.loads(raw))
+            value = self._next_run_utc(job)
+            with self._engine.begin() as connection:
+                connection.execute(
+                    self.jobs.update()
+                    .where(self.jobs.c.id == job_id)
+                    .values(next_run_utc=value)
+                )
 
     def _with_write_retry(self, fn, *args):
         """Retry short-lived SQLite lock contention on write operations.
@@ -100,6 +141,7 @@ class SQLAlchemyJobStore(JobStore):
                     self.jobs.insert().values(
                         id=job.job_id,
                         job_json=json.dumps(job.to_dict(), ensure_ascii=False),
+                        next_run_utc=self._next_run_utc(job),
                     )
                 )
         except IntegrityError:
@@ -114,7 +156,10 @@ class SQLAlchemyJobStore(JobStore):
             result = connection.execute(
                 self.jobs.update()
                 .where(self.jobs.c.id == job.job_id)
-                .values(job_json=json.dumps(job.to_dict(), ensure_ascii=False))
+                .values(
+                    job_json=json.dumps(job.to_dict(), ensure_ascii=False),
+                    next_run_utc=self._next_run_utc(job),
+                )
             )
             if result.rowcount == 0:
                 raise JobNotFoundError(job.job_id)
@@ -140,15 +185,18 @@ class SQLAlchemyJobStore(JobStore):
         return Job.from_dict(json.loads(raw)) if raw is not None else None
 
     def get_due(self, now: datetime) -> list[Job]:
-        jobs = self._load_all()
-        return sorted(
-            (
-                job
-                for job in jobs
-                if job.next_run_time is not None and job.next_run_time <= now
-            ),
-            key=lambda job: job.next_run_time,
-        )
+        self._ensure()
+        now_utc = now.astimezone(UTC).isoformat()
+        with self._engine.connect() as connection:
+            raw_rows = connection.execute(
+                sa.select(self.jobs.c.job_json)
+                .where(
+                    self.jobs.c.next_run_utc.is_not(None),
+                    self.jobs.c.next_run_utc <= now_utc,
+                )
+                .order_by(self.jobs.c.next_run_utc)
+            ).scalars().all()
+        return [Job.from_dict(json.loads(raw)) for raw in raw_rows]
 
     def get_all(self) -> list[Job]:
         jobs = self._load_all()
@@ -160,12 +208,15 @@ class SQLAlchemyJobStore(JobStore):
         return scheduled + paused
 
     def get_next_run_time(self) -> datetime | None:
-        candidates = [
-            job.next_run_time
-            for job in self._load_all()
-            if job.next_run_time is not None
-        ]
-        return min(candidates) if candidates else None
+        self._ensure()
+        with self._engine.connect() as connection:
+            raw = connection.execute(
+                sa.select(self.jobs.c.next_run_utc)
+                .where(self.jobs.c.next_run_utc.is_not(None))
+                .order_by(self.jobs.c.next_run_utc)
+                .limit(1)
+            ).scalar_one_or_none()
+        return datetime.fromisoformat(raw) if raw is not None else None
 
     def add_log(self, job_id: str, log: ExecutionLog) -> None:
         self._ensure()

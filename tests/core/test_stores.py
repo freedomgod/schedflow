@@ -78,6 +78,37 @@ class TestSQLAlchemyJobStore:
 
         assert [job.job_id for job in due] == ["a", "b"]
 
+    def test_get_due_uses_utc_column_and_ignores_future(self, sqlalchemy_store):
+        from datetime import timedelta
+
+        now = datetime.now(UTC)
+        past = make_job("past")
+        past.next_run_time = now - timedelta(seconds=2)
+        future = make_job("future")
+        future.next_run_time = now + timedelta(hours=1)
+        paused = make_job("paused")
+        paused.next_run_time = None
+        sqlalchemy_store.add(future)
+        sqlalchemy_store.add(past)
+        sqlalchemy_store.add(paused)
+
+        assert [job.job_id for job in sqlalchemy_store.get_due(now)] == ["past"]
+        # 尚未执行的 past 仍是最早调度时间；get_next_run_time 返回它。
+        assert sqlalchemy_store.get_next_run_time() == past.next_run_time
+
+    def test_get_due_requires_next_run_utc_column(self, sqlalchemy_store):
+        import sqlalchemy as sa
+
+        sqlalchemy_store.get_due(datetime.now(UTC))
+        with sqlalchemy_store._engine.connect() as connection:
+            rows = connection.execute(
+                sa.text(
+                    "SELECT name FROM pragma_table_info('jobs') "
+                    "WHERE name='next_run_utc'"
+                )
+            ).scalars().all()
+        assert rows == ["next_run_utc"]
+
     def test_get_next_run_time(self, sqlalchemy_store):
         now = datetime.now(UTC)
         job = make_job("j1")
