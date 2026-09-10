@@ -534,11 +534,9 @@ class Scheduler:
                         "trigger must provide get_next_fire_time(previous, now)"
                     )
                 job.trigger = trigger
-                job.next_run_time = trigger.get_next_fire_time(
-                    None, datetime.now(self._timezone)
-                )
                 if job.status == "completed":
                     job.status = "running"
+                self._arm(job, datetime.now(self._timezone))
             if executor_alias is not None:
                 job.executor_alias = executor_alias
             if jobstore_alias is not None:
@@ -583,13 +581,39 @@ class Scheduler:
         self._events.publish(SchedulerEvent("job.removed", job_id=job_id))
         self._refresh_job_metrics()
 
+    def _disarm(self, job: Job) -> None:
+        """Clear the armed schedule.
+
+        A job without ``next_run_time`` is not schedulable, so disarming is the
+        only way to stop a job store from handing it to the main loop.
+        """
+        job.next_run_time = None
+
+    def _arm(
+        self,
+        job: Job,
+        now: datetime,
+        *,
+        previous: datetime | None = None,
+    ) -> bool:
+        """Arm the job only when it is schedulable.
+
+        Returns True when a next run time was produced. Non-running jobs are
+        always disarmed so ``status`` stays the single source of truth.
+        """
+        if job.status != "running" or job.trigger is None:
+            self._disarm(job)
+            return False
+        job.next_run_time = job.trigger.get_next_fire_time(previous, now)
+        return job.next_run_time is not None
+
     def pause_job(self, job_id: str) -> Job:
         with self._lock:
             job = self._find_job(job_id)
             if job is None:
                 raise JobNotFoundError(job_id)
             job.status = "paused"
-            job.next_run_time = None
+            self._disarm(job)
             store = self._jobstores.get(job.jobstore_alias, self._jobstore)
             store.update(job)
         self._events.publish(SchedulerEvent("job.paused", job_id=job_id))
@@ -611,13 +635,7 @@ class Scheduler:
                 )
                 return job
             job.status = "running"
-            job.next_run_time = (
-                job.trigger.get_next_fire_time(
-                    None, datetime.now(self._timezone)
-                )
-                if job.trigger is not None
-                else None
-            )
+            self._arm(job, datetime.now(self._timezone))
             store = self._jobstores.get(job.jobstore_alias, self._jobstore)
             store.update(job)
         self._events.publish(SchedulerEvent("job.resumed", job_id=job_id))
@@ -1163,13 +1181,23 @@ class Scheduler:
 
     def _advance(self, job: Job, run_time: datetime, now: datetime) -> None:
         store = self._jobstores.get(job.jobstore_alias, self._jobstore)
+        if job.status != "running":
+            # A paused/completed job must never keep an armed schedule; this is
+            # the last line of defence against stale store rows.
+            if job.next_run_time is not None:
+                self._disarm(job)
+                try:
+                    store.update(job)
+                except JobNotFoundError:
+                    return
+            return
         if job.trigger is None:
-            job.next_run_time = None
+            self._disarm(job)
         else:
             next_run = job.trigger.get_next_fire_time(run_time, now)
             if next_run is None:
                 job.status = "completed"
-                job.next_run_time = None
+                self._disarm(job)
                 try:
                     store.update(job)
                 except JobNotFoundError:
