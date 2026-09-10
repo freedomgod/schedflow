@@ -483,3 +483,68 @@ def test_concurrent_add_and_cancel_no_deadlock():
 
     assert errors == []
     assert len(scheduler.get_jobs()) == 100
+
+
+def test_run_job_now_resume_uses_snapshot():
+    from schedflow.core.snapshot import RunSnapshot, TaskRecordSnapshot
+
+    scheduler = make_scheduler()
+    calls = {"a": 0}
+
+    def bump():
+        calls["a"] += 1
+        return "A"
+
+    wf = Workflow("wf")
+    wf.add_task("a", func=bump)
+    wf.add_task("b", func=lambda: "B")
+    wf.add_edge("a", "b")
+    scheduler.add_job(wf, job_id="j1")
+    snapshot = RunSnapshot.start(
+        job_id="j1",
+        execution_id="run-0",
+        workflow_fingerprint=wf.fingerprint(),
+        status="failed",
+    )
+    snapshot.set_node(
+        TaskRecordSnapshot(node_id="a", status="succeeded", result="A")
+    )
+    scheduler.get_jobstore("default").save_snapshot("j1", snapshot)
+
+    log = scheduler.run_job_now("j1", mode="resume")
+
+    assert calls["a"] == 0
+    assert log.records["a"].resumed is True
+    assert log.records["b"].status == "succeeded"
+
+
+def test_start_applies_on_restart_rerun_policy():
+    from schedflow.core.snapshot import RunSnapshot
+
+    scheduler = make_scheduler()
+    scheduler.add_job(
+        make_workflow(),
+        trigger=IntervalTrigger(seconds=3600),
+        job_id="j1",
+        on_restart="rerun",
+    )
+    job = scheduler.get_job("j1")
+    snapshot = RunSnapshot.start(
+        job_id="j1",
+        execution_id="run-stale",
+        workflow_fingerprint=job.workflow.fingerprint(),
+    )
+    scheduler.get_jobstore("default").save_snapshot("j1", snapshot)
+
+    scheduler.start()
+    try:
+        deadline = time.time() + 5
+        while not scheduler.get_job_logs("j1") and time.time() < deadline:
+            time.sleep(0.05)
+        assert scheduler.get_job_logs("j1")
+        stale = scheduler.get_jobstore("default").get_snapshot(
+            "j1", "run-stale"
+        )
+        assert stale.status in {"failed", "cancelled", "succeeded"}
+    finally:
+        scheduler.shutdown()

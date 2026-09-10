@@ -6,6 +6,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -22,9 +23,14 @@ from schedflow.core.jobstore import (
 )
 from schedflow.core.plugins import EXECUTOR_PLUGINS, JOBSTORE_PLUGINS
 from schedflow.core.run import RunRequest
+from schedflow.core.snapshot import (
+    DagChangedError,
+    RunSnapshot,
+    TaskRecordSnapshot,
+)
 from schedflow.core.workflow import Workflow
 from schedflow.triggers.base import Trigger
-from schedflow.utils import astimezone
+from schedflow.utils import CustomTypeID, astimezone
 
 LOGGER = logging.getLogger(__name__)
 
@@ -88,6 +94,7 @@ class Scheduler:
         self._dispatch_lock = threading.RLock()
         self._running: dict[str, int] = {}
         self._cancel_events: dict[str, threading.Event] = {}
+        self._active_snapshots: dict[str, RunSnapshot] = {}
         self._dispatch_queue = DispatchQueue(capacity=dispatch_capacity)
         self._dispatcher: threading.Thread | None = None
         self._error_event_logged_at: dict[str, float] = {}
@@ -628,27 +635,167 @@ class Scheduler:
         with self._dispatch_lock:
             return self._cancel_events.get(job_id)
 
-    def run_job_now(self, job_id: str, *, max_workers: int = 3) -> ExecutionLog:
+    def _job_store(self, job: Job):
+        return self._jobstores.get(job.jobstore_alias, self._jobstore)
+
+    def _latest_resumable_snapshot(self, job: Job) -> RunSnapshot | None:
+        store = self._job_store(job)
+        for snapshot in store.list_snapshots(job.job_id):
+            if snapshot.status in {"running", "failed"}:
+                return snapshot
+        return None
+
+    def _prepare_run(
+        self, job: Job, request: RunRequest
+    ) -> tuple[RunRequest, RunSnapshot, Callable]:
+        store = self._job_store(job)
+        resumes_from = None
+        if request.mode == "resume":
+            source = None
+            if request.resume_snapshot is not None:
+                source = RunSnapshot.from_dict(request.resume_snapshot)
+            elif request.resume_execution_id is not None:
+                source = store.get_snapshot(
+                    job.job_id, request.resume_execution_id
+                )
+            else:
+                source = self._latest_resumable_snapshot(job)
+            if source is None:
+                raise ValueError("no resumable snapshot for this job")
+            if source.workflow_fingerprint != job.workflow.fingerprint():
+                raise DagChangedError(
+                    "Workflow definition changed since the snapshot was taken"
+                )
+            resumes_from = source.execution_id
+            request = replace(
+                request,
+                resume_snapshot=source.to_dict(),
+                resume_execution_id=source.execution_id,
+            )
+        execution_id = request.execution_id or CustomTypeID.full_str("flowlog")
+        request = replace(request, execution_id=execution_id)
+        snapshot = RunSnapshot.start(
+            job_id=job.job_id,
+            execution_id=execution_id,
+            workflow_fingerprint=job.workflow.fingerprint(),
+            mode=request.mode,
+            resumes_from=resumes_from,
+        )
+        store.save_snapshot(job.job_id, snapshot)
+        with self._dispatch_lock:
+            self._active_snapshots[execution_id] = snapshot
+
+        def on_node_finished(node_id: str, record) -> None:
+            snapshot.set_node(
+                TaskRecordSnapshot(
+                    node_id=node_id,
+                    status=record.status,
+                    result=(
+                        record.result
+                        if record.status == "succeeded"
+                        else None
+                    ),
+                    error=record.error,
+                    skip_reason=record.skip_reason,
+                    resumed=bool(record.resumed),
+                )
+            )
+            try:
+                store.save_snapshot(job.job_id, snapshot)
+            except Exception:
+                LOGGER.exception(
+                    "snapshot checkpoint failed job_id=%s node_id=%s",
+                    job.job_id,
+                    node_id,
+                )
+
+        return request, snapshot, on_node_finished
+
+    def _finalize_active_snapshot(self, job: Job, log: ExecutionLog) -> None:
+        with self._dispatch_lock:
+            snapshot = self._active_snapshots.pop(log.log_id, None)
+        if snapshot is None:
+            return
+        if log.cancelled:
+            status = "cancelled"
+        elif log.succeeded:
+            status = "succeeded"
+        else:
+            status = "failed"
+        snapshot.mark_status(status)
+        store = self._job_store(job)
+        try:
+            store.save_snapshot(job.job_id, snapshot)
+            snapshots = store.list_snapshots(job.job_id)
+            for stale in snapshots[20:]:
+                store.delete_snapshot(job.job_id, stale.execution_id)
+        except Exception:
+            LOGGER.exception("snapshot finalize failed job_id=%s", job.job_id)
+
+    def _fail_active_snapshots(self, job: Job, error: Exception) -> None:
+        with self._dispatch_lock:
+            snapshots = [
+                snapshot
+                for snapshot in self._active_snapshots.values()
+                if snapshot.job_id == job.job_id
+            ]
+            for snapshot in snapshots:
+                self._active_snapshots.pop(snapshot.execution_id, None)
+        store = self._job_store(job)
+        for snapshot in snapshots:
+            snapshot.mark_status("failed")
+            try:
+                store.save_snapshot(job.job_id, snapshot)
+            except Exception:
+                LOGGER.exception(
+                    "snapshot failure update failed job_id=%s", job.job_id
+                )
+
+    def run_job_now(
+        self,
+        job_id: str,
+        *,
+        max_workers: int = 3,
+        mode: str = "full",
+        timeout: float | None = None,
+    ) -> ExecutionLog:
         with self._lock:
             job = self._find_job(job_id)
             if job is None:
                 raise JobNotFoundError(job_id)
             store = self._jobstores.get(job.jobstore_alias, self._jobstore)
+        request, snapshot, on_node_finished = self._prepare_run(
+            job, RunRequest(mode=mode, timeout=timeout)
+        )
         self._events.publish(
             SchedulerEvent("job.started", job_id=job_id)
         )
         try:
-            log = job.run(max_workers=max_workers)
+            log = job.run(
+                max_workers=max_workers,
+                request=request,
+                on_node_finished=on_node_finished,
+            )
         except Exception:
+            snapshot.mark_status("failed")
+            store.save_snapshot(job.job_id, snapshot)
+            with self._dispatch_lock:
+                self._active_snapshots.pop(snapshot.execution_id, None)
             self._events.publish(SchedulerEvent("job.failed", job_id=job_id))
             raise
         with self._lock:
             store.add_log(job_id, log)
         self._publish_task_events(job_id, None, log)
-        kind = "job.succeeded" if log.succeeded else "job.failed"
+        if log.cancelled:
+            kind = "job.cancelled"
+        elif log.succeeded:
+            kind = "job.succeeded"
+        else:
+            kind = "job.failed"
         self._events.publish(
             SchedulerEvent(kind, job_id=job_id, log=log)
         )
+        self._finalize_active_snapshot(job, log)
         return log
 
     def get_job_logs(self, job_id: str) -> list[ExecutionLog]:
@@ -688,6 +835,7 @@ class Scheduler:
             daemon=True,
         )
         self._dispatcher.start()
+        self._recover_interrupted_runs()
         self._events.publish(SchedulerEvent("scheduler.started"))
 
     def pause(self) -> None:
@@ -717,6 +865,64 @@ class Scheduler:
             executor.shutdown(wait=wait)
         self.state = STATE_STOPPED
         self._events.publish(SchedulerEvent("scheduler.shutdown"))
+
+    def _recover_interrupted_runs(self) -> None:
+        """Apply ``Job.on_restart`` to snapshots left in ``running`` state."""
+        now = datetime.now(self._timezone)
+        for job in self.get_jobs():
+            if job.on_restart == "none":
+                continue
+            store = self._job_store(job)
+            stale = next(
+                (
+                    snapshot
+                    for snapshot in store.list_snapshots(job.job_id)
+                    if snapshot.status == "running"
+                ),
+                None,
+            )
+            if stale is None:
+                continue
+            if job.on_restart == "resume":
+                if (
+                    stale.workflow_fingerprint
+                    != job.workflow.fingerprint()
+                ):
+                    stale.mark_status("failed")
+                    store.save_snapshot(job.job_id, stale)
+                    self._events.publish(
+                        SchedulerEvent(
+                            "job.failed",
+                            job_id=job.job_id,
+                            detail={"reason": "resume_incompatible"},
+                        )
+                    )
+                    continue
+                request = RunRequest(
+                    mode="resume",
+                    timeout=job.workflow_timeout,
+                    resume_execution_id=stale.execution_id,
+                    resume_snapshot=stale.to_dict(),
+                )
+            else:
+                request = RunRequest(
+                    mode="full", timeout=job.workflow_timeout
+                )
+            stale.mark_status("failed")
+            store.save_snapshot(job.job_id, stale)
+            with self._dispatch_lock:
+                count = self._running.get(job.job_id, 0)
+                if count >= job.max_instances:
+                    continue
+                if not self._dispatch_queue.put(job, now, request):
+                    self._publish_error(
+                        RuntimeError(
+                            f"dispatch queue full for job {job.job_id!r}"
+                        ),
+                        key=f"queue-full:{job.job_id}",
+                    )
+                    continue
+                self._running[job.job_id] = count + 1
 
     # ── main loop ───────────────────────────────────────────────────────
 
@@ -826,6 +1032,26 @@ class Scheduler:
                     SchedulerEvent("job.cancelled", job_id=job.job_id)
                 )
                 continue
+            try:
+                request, _snapshot, on_node_finished = self._prepare_run(
+                    job,
+                    request
+                    or RunRequest(
+                        mode="full", timeout=job.workflow_timeout
+                    ),
+                )
+            except Exception as exc:
+                LOGGER.exception(
+                    "run preparation failed job_id=%s", job.job_id
+                )
+                self._publish_error(exc, key=f"prepare:{job.job_id}")
+                with self._dispatch_lock:
+                    count = self._running.get(job.job_id, 1) - 1
+                    if count <= 0:
+                        self._running.pop(job.job_id, None)
+                    else:
+                        self._running[job.job_id] = count
+                continue
             self._events.publish(
                 SchedulerEvent(
                     "job.started", job_id=job.job_id, run_time=run_time
@@ -834,7 +1060,15 @@ class Scheduler:
             executor = self._executors.get(
                 job.executor_alias, self._executor
             )
-            executor.submit(job, run_time, request, on_node_finished=None)
+            try:
+                executor.submit(
+                    job,
+                    run_time,
+                    request,
+                    on_node_finished=on_node_finished,
+                )
+            except Exception as exc:  # noqa: BLE001
+                self._on_job_finished(job, run_time, None, error=exc)
 
     def _advance(self, job: Job, run_time: datetime, now: datetime) -> None:
         store = self._jobstores.get(job.jobstore_alias, self._jobstore)
@@ -887,6 +1121,7 @@ class Scheduler:
             self._events.publish(
                 SchedulerEvent(kind, job_id=job.job_id, run_time=run_time, log=log)
             )
+            self._finalize_active_snapshot(job, log)
         elif error is not None:
             from schedflow.core.log import ExecutionLog, TaskRecord
 
@@ -921,6 +1156,7 @@ class Scheduler:
                     log=log,
                 )
             )
+            self._fail_active_snapshots(job, error)
 
     def _publish_task_events(
         self,
