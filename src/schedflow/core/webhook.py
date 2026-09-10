@@ -66,6 +66,47 @@ def event_to_payload(event) -> dict:
     return payload
 
 
+def deliver_once(config: WebhookConfig, payload: dict) -> dict:
+    """POST one payload using the sink's retry policy.
+
+    Returns ``{"ok", "status_code", "error", "duration_ms"}`` and never raises
+    for transport errors, so callers (including the settings API) can surface
+    the outcome to users.
+    """
+    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if config.secret:
+        headers["X-SchedFlow-Secret"] = config.secret
+    started = time.monotonic()
+    last_error: Exception | None = None
+    status_code: int | None = None
+    for attempt in range(3):
+        request = urllib.request.Request(
+            config.url, data=body, headers=headers, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(
+                request, timeout=config.timeout
+            ) as response:
+                status_code = response.status
+                if 200 <= status_code < 300:
+                    return {
+                        "ok": True,
+                        "status_code": status_code,
+                        "error": None,
+                        "duration_ms": (time.monotonic() - started) * 1000,
+                    }
+        except Exception as exc:  # noqa: BLE001 - retry on any failure
+            last_error = exc
+        time.sleep(0.5 * (2**attempt))
+    return {
+        "ok": False,
+        "status_code": status_code,
+        "error": str(last_error) if last_error is not None else "delivery failed",
+        "duration_ms": (time.monotonic() - started) * 1000,
+    }
+
+
 class WebhookEventSink:
     """Bounded, best-effort webhook delivery for scheduler events."""
 
@@ -147,30 +188,13 @@ class WebhookEventSink:
             self._deliver(config, payload)
 
     def _deliver(self, config: WebhookConfig, payload: dict) -> None:
-        body = json.dumps(payload, ensure_ascii=False, default=str).encode(
-            "utf-8"
-        )
-        headers = {"Content-Type": "application/json"}
-        if config.secret:
-            headers["X-SchedFlow-Secret"] = config.secret
-        last_error: Exception | None = None
-        for attempt in range(3):
-            request = urllib.request.Request(
-                config.url, data=body, headers=headers, method="POST"
-            )
-            try:
-                with urllib.request.urlopen(
-                    request, timeout=config.timeout
-                ) as response:
-                    if 200 <= response.status < 300:
-                        counter_inc("schedflow_webhook_delivered_total")
-                        return
-            except Exception as exc:  # noqa: BLE001 - retry on any failure
-                last_error = exc
-            time.sleep(0.5 * (2**attempt))
+        result = deliver_once(config, payload)
+        if result["ok"]:
+            counter_inc("schedflow_webhook_delivered_total")
+            return
         counter_inc("schedflow_webhook_failures_total")
         LOGGER.warning(
             "webhook delivery failed url=%s error=%s",
             config.url,
-            last_error,
+            result["error"],
         )

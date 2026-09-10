@@ -12,6 +12,7 @@ from schedflow.api.schemas import (
     VariableItem,
     VariableUpdateRequest,
     WebhooksRequest,
+    WebhookTestRequest,
 )
 from schedflow.settings.models import (
     create_variable,
@@ -109,6 +110,30 @@ def webhooks_set(request_body: WebhooksRequest, request: Request):
     set_webhooks_config(configs)
     _apply_webhook_sink(request, configs)
     return APIResponse(data=configs)
+
+
+@router.post("/webhooks/test")
+def webhooks_test(request_body: WebhookTestRequest):
+    """Deliver a sample event so users can verify a webhook end to end."""
+    from schedflow.core.webhook import WebhookConfig, deliver_once
+
+    candidate = request_body.model_dump(exclude_none=True)
+    if not candidate.get("url"):
+        configs = get_webhooks_config()
+        if not configs:
+            raise HTTPException(status_code=422, detail="No webhook configured")
+        candidate = {**configs[0], **candidate}
+    config = WebhookConfig.from_dict(candidate)
+    event = (config.events or ("job.succeeded",))[0]
+    if event == "*" or event.endswith(".*"):
+        event = "job.succeeded"
+    payload = {
+        "kind": event,
+        "job_id": "test",
+        "run_time": None,
+        "detail": {"source": "webhook-test"},
+    }
+    return APIResponse(data=deliver_once(config, payload))
 
 
 def _apply_webhook_sink(request: Request, configs: list[dict]) -> None:

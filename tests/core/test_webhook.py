@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from schedflow.core.events import SchedulerEvent
 from schedflow.core.scheduler import Scheduler
-from schedflow.core.webhook import WebhookConfig, WebhookEventSink
+from schedflow.core.webhook import WebhookConfig, WebhookEventSink, deliver_once
 
 
 class _Receiver(BaseHTTPRequestHandler):
@@ -84,3 +84,35 @@ def test_webhook_config_parses_events():
     assert config.events == ("job.*",)
     assert config.matches("job.succeeded") is True
     assert config.matches("task.executed") is False
+
+
+def test_deliver_once_posts_payload_with_secret():
+    server, thread = _start_receiver()
+    try:
+        result = deliver_once(
+            WebhookConfig(
+                url=f"http://127.0.0.1:{server.server_port}/hook",
+                secret="s3cret",
+                timeout=2.0,
+            ),
+            {"kind": "job.succeeded", "job_id": "j1"},
+        )
+
+        assert result["ok"] is True
+        assert result["status_code"] == 200
+        assert result["error"] is None
+        assert _Receiver.received[-1]["body"]["kind"] == "job.succeeded"
+        assert _Receiver.received[-1]["secret"] == "s3cret"
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+
+def test_deliver_once_reports_failure():
+    result = deliver_once(
+        WebhookConfig(url="http://127.0.0.1:1/nope", timeout=0.2),
+        {"kind": "job.succeeded"},
+    )
+
+    assert result["ok"] is False
+    assert result["error"]

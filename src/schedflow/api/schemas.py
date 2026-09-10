@@ -168,6 +168,13 @@ class WebhooksRequest(BaseModel):
     webhooks: list[WebhookConfigItem] = Field(default_factory=list)
 
 
+class WebhookTestRequest(BaseModel):
+    url: str | None = None
+    events: list[str] | None = None
+    secret: str | None = None
+    timeout: float | None = Field(default=None, gt=0)
+
+
 class RateLimitRequest(BaseModel):
     enabled: bool = False
     rpm: int = Field(default=120, ge=1)
