@@ -142,6 +142,25 @@ class TestSQLAlchemyJobStore:
             == "missing_module_xyz:fn"
         )
 
+    def test_snapshot_roundtrip(self, sqlalchemy_store):
+        from schedflow.core.snapshot import RunSnapshot
+
+        sqlalchemy_store.add(make_job())
+        snapshot = RunSnapshot.start(
+            job_id="j1", execution_id="run-1", workflow_fingerprint="f"
+        )
+
+        sqlalchemy_store.save_snapshot("j1", snapshot)
+        restored = sqlalchemy_store.get_snapshot("j1", "run-1")
+
+        assert restored.workflow_fingerprint == "f"
+        assert [
+            item.execution_id
+            for item in sqlalchemy_store.list_snapshots("j1")
+        ] == ["run-1"]
+        sqlalchemy_store.delete_snapshot("j1", "run-1")
+        assert sqlalchemy_store.get_snapshot("j1", "run-1") is None
+
 
 @pytest.mark.skipif(
     not __import__("shutil").which("redis-server"),

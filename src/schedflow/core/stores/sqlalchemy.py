@@ -20,6 +20,7 @@ from schedflow.core.jobstore import (
     JobStore,
 )
 from schedflow.core.log import ExecutionLog
+from schedflow.core.snapshot import RunSnapshot
 
 try:
     import sqlalchemy as sa
@@ -66,6 +67,15 @@ class SQLAlchemyJobStore(JobStore):
             sa.Column("job_id", sa.String(191), nullable=False),
             sa.Column("log_json", sa.Text, nullable=False),
         )
+        self.snapshots = sa.Table(
+            "job_run_snapshots",
+            self._metadata,
+            sa.Column("execution_id", sa.String(76), primary_key=True),
+            sa.Column("job_id", sa.String(191), nullable=False),
+            sa.Column("snapshot_json", sa.Text, nullable=False),
+            sa.Column("started_at", sa.String(64), nullable=False),
+            sa.Index("ix_snapshots_job_started", "job_id", "started_at"),
+        )
 
     @staticmethod
     def _next_run_utc(job: Job) -> str | None:
@@ -99,6 +109,8 @@ class SQLAlchemyJobStore(JobStore):
                         "ON jobs (next_run_utc)"
                     )
                 )
+        if "job_run_snapshots" not in inspector.get_table_names():
+            self.snapshots.create(self._engine, checkfirst=True)
         self._backfill_next_run_utc()
 
     def _backfill_next_run_utc(self) -> None:
@@ -262,6 +274,66 @@ class SQLAlchemyJobStore(JobStore):
             if log.log_id == log_id:
                 return log
         return None
+
+    def save_snapshot(self, job_id: str, snapshot: RunSnapshot) -> None:
+        self._ensure()
+        self._with_write_retry(self._save_snapshot_once, job_id, snapshot)
+
+    def _save_snapshot_once(self, job_id: str, snapshot: RunSnapshot) -> None:
+        values = {
+            "execution_id": snapshot.execution_id,
+            "job_id": job_id,
+            "snapshot_json": json.dumps(
+                snapshot.to_dict(), ensure_ascii=False
+            ),
+            "started_at": snapshot.started_at.isoformat(),
+        }
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                self.snapshots.update()
+                .where(
+                    self.snapshots.c.execution_id == snapshot.execution_id
+                )
+                .values(**values)
+            )
+            if result.rowcount == 0:
+                connection.execute(self.snapshots.insert().values(**values))
+
+    def get_snapshot(
+        self, job_id: str, execution_id: str
+    ) -> RunSnapshot | None:
+        self._ensure()
+        with self._engine.connect() as connection:
+            raw = connection.execute(
+                sa.select(self.snapshots.c.snapshot_json).where(
+                    self.snapshots.c.job_id == job_id,
+                    self.snapshots.c.execution_id == execution_id,
+                )
+            ).scalar_one_or_none()
+        return RunSnapshot.from_dict(json.loads(raw)) if raw else None
+
+    def list_snapshots(self, job_id: str) -> list[RunSnapshot]:
+        self._ensure()
+        with self._engine.connect() as connection:
+            raw_rows = connection.execute(
+                sa.select(self.snapshots.c.snapshot_json)
+                .where(self.snapshots.c.job_id == job_id)
+                .order_by(
+                    self.snapshots.c.started_at.desc(),
+                    self.snapshots.c.execution_id.desc(),
+                )
+            ).scalars().all()
+        return [RunSnapshot.from_dict(json.loads(raw)) for raw in raw_rows]
+
+    def delete_snapshot(self, job_id: str, execution_id: str) -> None:
+        self._ensure()
+        with self._engine.begin() as connection:
+            connection.execute(
+                self.snapshots.delete().where(
+                    self.snapshots.c.job_id == job_id,
+                    self.snapshots.c.execution_id == execution_id,
+                )
+            )
 
     def close(self) -> None:
         self._engine.dispose()
