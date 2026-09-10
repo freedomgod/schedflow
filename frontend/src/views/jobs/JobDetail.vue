@@ -45,6 +45,7 @@
             <div class="info-row"><dt>容错时间</dt><dd>{{ job.misfire_grace_time ?? '-' }}s</dd></div>
             <div class="info-row"><dt>合并执行</dt><dd>{{ job.coalesce ? '是' : '否' }}</dd></div>
             <div class="info-row"><dt>最大实例数</dt><dd>{{ job.max_instances ?? '-' }}</dd></div>
+            <div class="info-row"><dt>实时事件</dt><dd>{{ lastJobEvent || '-' }}</dd></div>
             <div class="info-row">
               <dt>执行</dt>
               <dd class="detail-run-actions">
@@ -169,6 +170,7 @@ import type { DagData, TaskNodeProperties } from '@/types/workflow'
 import { getExecutorConfigs, getConfiguredJobstores, getJobstoreConfig } from '@/api/components'
 import type { ComponentConfig, JobstoreDetailConfig } from '@/api/components'
 import { marked } from 'marked'
+import { useJobSse } from '@/composables/useJobSse'
 import WorkflowEditor from './WorkflowEditor.vue'
 import TriggerConfig from './TriggerConfig.vue'
 import ComponentConfigDialog from './ComponentConfigDialog.vue'
@@ -180,6 +182,8 @@ const loading = ref(false)
 const savingConfig = ref(false)
 const isConfigEditing = ref(false)
 const sseNextRunTime = ref<string | null>(null)
+const lastJobEvent = ref<string | null>(null)
+let jobSseCleanup: (() => void) | null = null
 const runningAction = ref(false)
 const sseHasUpdate = ref(false)
 const viewWorkflowEditorRef = ref<InstanceType<typeof WorkflowEditor> | null>(null)
@@ -284,8 +288,21 @@ function startSSE() {
       sseHasUpdate.value = true
     },
     (error) => { console.warn('SSE error:', error) })
+  jobSseCleanup = useJobSse(
+    route.params.id as string,
+    (event) => {
+      lastJobEvent.value = event.kind
+      if (event.kind.startsWith('task.')) {
+        void fetchJob()
+      }
+    },
+    (error) => console.warn('Job SSE error:', error),
+  )
 }
-function stopSSE() { sseCleanup?.(); sseCleanup = null }
+function stopSSE() {
+  sseCleanup?.(); sseCleanup = null
+  jobSseCleanup?.(); jobSseCleanup = null
+}
 
 async function showExecutorConfig(name: string) { executorDialogTitle.value = `执行器配置 — ${name}`; executorDialogVisible.value = true; try { const c = await getExecutorConfigs(); const f = c.find((x: ComponentConfig) => x.name === name); executorFields.value = f ? Object.entries(f.config || {}).map(([k, v]) => ({ label: k, value: v })) : [] } catch { executorFields.value = [] } }
 

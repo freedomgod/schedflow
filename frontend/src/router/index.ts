@@ -66,6 +66,12 @@ const router = createRouter({
       meta: { title: '系统设置' },
     },
     {
+      path: '/observability-settings',
+      name: 'observability-settings',
+      component: () => import('@/views/settings/ObservabilitySettings.vue'),
+      meta: { title: '可观测性与集成' },
+    },
+    {
       path: '/storage-config',
       name: 'storage-config',
       component: () => import('@/views/components/StorageConfig.vue'),

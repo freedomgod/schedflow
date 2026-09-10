@@ -36,3 +36,30 @@ export function updateVariable(id: string, data: { name?: string; value?: string
 export function deleteVariable(id: string): Promise<void> {
   return client.delete(`/settings/variables/${id}`)
 }
+
+export interface WebhookConfig {
+  url: string
+  events: string[]
+  secret?: string | null
+}
+
+export interface RateLimitConfig {
+  enabled: boolean
+  rpm: number
+}
+
+export function getWebhooks(): Promise<WebhookConfig[]> {
+  return client.get('/settings/webhooks')
+}
+
+export function setWebhooks(webhooks: WebhookConfig[]): Promise<WebhookConfig[]> {
+  return client.put('/settings/webhooks', { webhooks })
+}
+
+export function getRateLimit(): Promise<RateLimitConfig> {
+  return client.get('/settings/rate-limit')
+}
+
+export function setRateLimit(config: RateLimitConfig): Promise<RateLimitConfig> {
+  return client.put('/settings/rate-limit', config)
+}
