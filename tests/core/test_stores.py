@@ -209,6 +209,31 @@ class TestMongoDBJobStore:
         finally:
             store.close()
 
+    def test_snapshot_roundtrip(self):
+        from schedflow.core.snapshot import RunSnapshot
+
+        store = RedisJobStore(host="localhost", port=6379, db=15)
+        try:
+            snapshot = RunSnapshot.start(
+                job_id="redis-snap",
+                execution_id="run-1",
+                workflow_fingerprint="f",
+            )
+            store.save_snapshot("redis-snap", snapshot)
+
+            assert (
+                store.get_snapshot("redis-snap", "run-1").workflow_fingerprint
+                == "f"
+            )
+            assert [
+                item.execution_id
+                for item in store.list_snapshots("redis-snap")
+            ] == ["run-1"]
+            store.delete_snapshot("redis-snap", "run-1")
+            assert store.get_snapshot("redis-snap", "run-1") is None
+        finally:
+            store.close()
+
     def test_get_due_uses_indexed_utc_field(self):
         store = MongoDBJobStore(
             host="localhost", port=27017, database="schedflow_test"

@@ -12,6 +12,7 @@ from schedflow.core.jobstore import (
     JobStore,
 )
 from schedflow.core.log import ExecutionLog
+from schedflow.core.snapshot import RunSnapshot
 
 try:
     from redis import Redis
@@ -44,6 +45,7 @@ class RedisJobStore(JobStore):
         self._jobs_key = f"{prefix}:jobs"
         self._run_times_key = f"{prefix}:run_times"
         self._logs_key = f"{prefix}:logs"
+        self._snapshots_key = f"{prefix}:snapshots"
 
     def add(self, job: Job) -> None:
         if self._redis.hexists(self._jobs_key, job.job_id):
@@ -130,6 +132,54 @@ class RedisJobStore(JobStore):
             if log.log_id == log_id:
                 return log
         return None
+
+    @staticmethod
+    def _snapshot_member(job_id: str, execution_id: str) -> str:
+        return f"{job_id}:{execution_id}"
+
+    def _snapshot_order_key(self, job_id: str) -> str:
+        return f"{self._snapshots_key}:order:{job_id}"
+
+    def save_snapshot(self, job_id: str, snapshot: RunSnapshot) -> None:
+        member = self._snapshot_member(job_id, snapshot.execution_id)
+        pipeline = self._redis.pipeline()
+        pipeline.hset(
+            self._snapshots_key,
+            member,
+            json.dumps(snapshot.to_dict(), ensure_ascii=False),
+        )
+        pipeline.zadd(
+            self._snapshot_order_key(job_id),
+            {member: snapshot.started_at.timestamp()},
+        )
+        pipeline.execute()
+
+    def get_snapshot(
+        self, job_id: str, execution_id: str
+    ) -> RunSnapshot | None:
+        raw = self._redis.hget(
+            self._snapshots_key,
+            self._snapshot_member(job_id, execution_id),
+        )
+        return RunSnapshot.from_dict(json.loads(raw)) if raw else None
+
+    def list_snapshots(self, job_id: str) -> list[RunSnapshot]:
+        members = self._redis.zrevrange(
+            self._snapshot_order_key(job_id), 0, -1
+        )
+        snapshots = []
+        for member in members:
+            raw = self._redis.hget(self._snapshots_key, member)
+            if raw:
+                snapshots.append(RunSnapshot.from_dict(json.loads(raw)))
+        return snapshots
+
+    def delete_snapshot(self, job_id: str, execution_id: str) -> None:
+        member = self._snapshot_member(job_id, execution_id)
+        pipeline = self._redis.pipeline()
+        pipeline.hdel(self._snapshots_key, member)
+        pipeline.zrem(self._snapshot_order_key(job_id), member)
+        pipeline.execute()
 
     def close(self) -> None:
         self._redis.close()
