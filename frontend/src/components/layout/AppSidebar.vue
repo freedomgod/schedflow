@@ -61,11 +61,11 @@
         <span v-show="!isCollapsed" class="nav-label">系统设置</span>
         <span v-if="isActive('/settings') && !isCollapsed" class="nav-indicator"></span>
       </router-link>
-      <router-link to="/observability-settings" class="nav-item" :class="{ active: isActive('/observability-settings') }" title="可观测性与集成">
+      <router-link to="/observability-settings" class="nav-item" :class="{ active: isActive('/observability-settings') }" title="集成">
         <span class="nav-icon">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 15V9M8 15V4M13 15v-4M18 15V7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         </span>
-        <span v-show="!isCollapsed" class="nav-label">可观测性与集成</span>
+        <span v-show="!isCollapsed" class="nav-label">集成</span>
         <span v-if="isActive('/observability-settings') && !isCollapsed" class="nav-indicator"></span>
       </router-link>
     </nav>

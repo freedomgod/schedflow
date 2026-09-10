@@ -69,7 +69,7 @@ const router = createRouter({
       path: '/observability-settings',
       name: 'observability-settings',
       component: () => import('@/views/settings/ObservabilitySettings.vue'),
-      meta: { title: '可观测性与集成' },
+      meta: { title: '集成' },
     },
     {
       path: '/storage-config',

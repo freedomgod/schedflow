@@ -63,3 +63,18 @@ export function getRateLimit(): Promise<RateLimitConfig> {
 export function setRateLimit(config: RateLimitConfig): Promise<RateLimitConfig> {
   return client.put('/settings/rate-limit', config)
 }
+
+export interface WebhookTestResult {
+  ok: boolean
+  status_code: number | null
+  error: string | null
+  duration_ms: number
+}
+
+export function testWebhookDelivery(params: {
+  url: string
+  events?: string[]
+  secret?: string
+}): Promise<WebhookTestResult> {
+  return client.post('/settings/webhooks/test', params)
+}

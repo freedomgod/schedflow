@@ -53,30 +53,100 @@
     <div v-show="activeTab === 'apikeys'" class="tab-content">
       <ApiKeyManager />
     </div>
+
+    <!-- API write rate limit tab -->
+    <div v-show="activeTab === 'rate-limit'" class="tab-content">
+      <div class="glass-card" style="padding: var(--space-xl);">
+        <h3 class="section-title">API 写限流</h3>
+        <p class="section-desc">
+          仅作用于 <code>POST/PUT/PATCH/DELETE /api/**</code> 的写请求，按登录主体（未认证时按客户端 IP）计数；
+          计数在单进程内存中完成，多 worker 各自独立；与任务的触发频率无关。
+        </p>
+        <div class="rate-limit-form">
+          <div class="form-group">
+            <label>启用写入限流</label>
+            <button
+              type="button"
+              class="toggle-switch"
+              :class="{ active: rateLimit.enabled }"
+              @click="rateLimit.enabled = !rateLimit.enabled"
+            >
+              <span class="toggle-thumb"></span>
+            </button>
+          </div>
+          <div class="form-group">
+            <label for="rate-limit-rpm">每分钟请求上限（rpm）</label>
+            <input
+              id="rate-limit-rpm"
+              v-model.number="rateLimit.rpm"
+              type="number"
+              min="1"
+              class="form-input"
+            />
+            <span class="field-hint">例如 120 表示平均每分钟允许 120 次写请求。</span>
+          </div>
+          <div class="settings-actions">
+            <button
+              type="button"
+              class="btn-primary"
+              :disabled="savingRateLimit"
+              @click="saveRateLimit"
+            >
+              保存限流
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+
+import { getRateLimit, setRateLimit } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import VariablesManager from './VariablesManager.vue'
 import ApiKeyManager from './ApiKeyManager.vue'
 
 const settingsStore = useSettingsStore()
 const activeTab = ref('theme')
+const savingRateLimit = ref(false)
+const rateLimit = reactive({ enabled: false, rpm: 120 })
 
 const tabs = [
   { key: 'theme', label: '主题设置' },
   { key: 'variables', label: '变量管理' },
   { key: 'apikeys', label: 'API Key' },
+  { key: 'rate-limit', label: 'API 写限流' },
 ]
 
 function handleThemeChange(val: string) {
   settingsStore.switchTheme(val as 'light' | 'dark')
 }
 
+async function loadRateLimit() {
+  const config = await getRateLimit()
+  rateLimit.enabled = config.enabled
+  rateLimit.rpm = config.rpm
+}
+
+async function saveRateLimit() {
+  savingRateLimit.value = true
+  try {
+    await setRateLimit({ enabled: rateLimit.enabled, rpm: rateLimit.rpm })
+    ElMessage.success('限流配置已保存')
+  } catch {
+    ElMessage.error('限流配置保存失败')
+  } finally {
+    savingRateLimit.value = false
+  }
+}
+
 onMounted(() => {
   settingsStore.fetchTheme()
+  loadRateLimit()
 })
 </script>
 
@@ -100,6 +170,18 @@ onMounted(() => {
 .settings-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
 
 .tab-content { min-height: 200px; }
+
+.rate-limit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-width: 360px;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+}
 
 /* Theme cards */
 .theme-cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-top: var(--space-md); }
