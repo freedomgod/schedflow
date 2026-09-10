@@ -48,6 +48,80 @@ def _streaming_response(event_stream) -> StreamingResponse:
     )
 
 
+def _serialize_event(event) -> dict:
+    payload = {
+        "kind": event.kind,
+        "job_id": event.job_id,
+        "run_time": event.run_time.isoformat() if event.run_time else None,
+        "detail": event.detail,
+    }
+    if event.record is not None:
+        payload["record"] = {
+            "node_id": event.record.node_id,
+            "status": event.record.status,
+            "error": event.record.error,
+            "skip_reason": event.record.skip_reason,
+            "resumed": getattr(event.record, "resumed", False),
+        }
+    if event.log is not None:
+        payload["log"] = {
+            "log_id": event.log.log_id,
+            "succeeded": event.log.succeeded,
+            "duration": event.log.duration,
+        }
+    return payload
+
+
+async def _job_events_stream(scheduler: Scheduler, job_id: str):
+    """Stream a job's execution events, with a first-run replay and heartbeats."""
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def on_event(event) -> None:
+        if event.job_id not in (None, job_id):
+            return
+        loop.call_soon_threadsafe(queue.put_nowait, _serialize_event(event))
+
+    scheduler.on("*", on_event)
+    try:
+        if scheduler.get_job(job_id) is None:
+            yield (
+                "event: error\n"
+                f"data: {json.dumps({'error': 'Job not found'})}\n\n"
+            )
+            return
+        try:
+            runs = scheduler.list_job_runs(job_id)
+        except Exception:  # noqa: BLE001 - replay is best effort
+            runs = []
+        if runs:
+            yield (
+                "event: snapshot\n"
+                f"data: {json.dumps({'run': runs[0]}, ensure_ascii=False)}\n\n"
+            )
+        while True:
+            try:
+                payload = await asyncio.wait_for(queue.get(), timeout=15)
+            except TimeoutError:
+                yield ": heartbeat\n\n"
+                continue
+            except asyncio.CancelledError:
+                break
+            yield (
+                f"event: {payload['kind']}\n"
+                f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            )
+    finally:
+        try:
+            scheduler.off("*", on_event)
+        except Exception as exc:  # noqa: BLE001 - best effort unsubscribe
+            import logging
+
+            logging.getLogger(__name__).debug(
+                "sse unsubscribe failed: %s", exc
+            )
+
+
 @router.get("/jobs/next-run-time")
 async def stream_all_next_run_times(
     scheduler: Scheduler = Depends(get_core_scheduler),
@@ -92,3 +166,12 @@ async def stream_next_run_time(
                 break
 
     return _streaming_response(event_stream())
+
+
+@router.get("/jobs/{job_id}/events")
+async def stream_job_events(
+    job_id: str,
+    scheduler: Scheduler = Depends(get_core_scheduler),
+):
+    """SSE endpoint streaming job/task execution events for one job."""
+    return _streaming_response(_job_events_stream(scheduler, job_id))

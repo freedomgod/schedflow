@@ -43,6 +43,31 @@ class TestSSEEventStream:
 
         asyncio.run(_run())
 
+
+def test_job_events_stream_yields_scheduler_events():
+    from schedflow.api.routers.sse import _job_events_stream
+    from schedflow.core import Scheduler, Workflow
+    from schedflow.core.events import SchedulerEvent
+
+    scheduler = Scheduler()
+    workflow = Workflow("sse-events")
+    workflow.add_task("a", func="os:getcwd")
+    scheduler.add_job(workflow, job_id="j1")
+
+    async def _run():
+        stream = _job_events_stream(scheduler, "j1").__aiter__()
+        pending = asyncio.ensure_future(stream.__anext__())
+        await asyncio.sleep(0.05)
+        scheduler._events.publish(
+            SchedulerEvent("job.started", job_id="j1")
+        )
+        chunk = await asyncio.wait_for(pending, timeout=2)
+        await stream.aclose()
+        return chunk
+
+    chunk = asyncio.run(_run())
+    assert "job.started" in chunk
+
     def test_event_stream_yields_error_for_missing_job(self):
         """event_stream should yield error event when job is not found."""
         mock_scheduler = MagicMock()
