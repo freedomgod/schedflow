@@ -107,6 +107,7 @@ class Scheduler:
         self._stop_event = threading.Event()
         self._wakeup_event = threading.Event()
         self._thread: threading.Thread | None = None
+        gauge_set("schedflow_scheduler_state", 0)
 
     # ── component management ────────────────────────────────────────────
 

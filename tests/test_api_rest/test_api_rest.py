@@ -268,3 +268,13 @@ def test_runs_overview_lists_executions():
 
     assert runs and runs[0]["execution_id"]
     assert runs[0]["mode"] in {"full", "resume"}
+
+
+def test_metrics_endpoint_returns_prometheus_text():
+    client = make_client()
+
+    resp = client.get("/api/metrics")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("text/plain")
+    assert "schedflow_scheduler_state" in resp.text

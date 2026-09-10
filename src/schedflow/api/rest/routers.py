@@ -1,6 +1,7 @@
 """REST API routes for jobs and scheduler control."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 
 from schedflow.api.rest.schemas import (
     JobCreateRequest,
@@ -10,6 +11,7 @@ from schedflow.api.rest.schemas import (
 )
 from schedflow.api.schemas import APIResponse
 from schedflow.core.jobstore import JobConflictError, JobNotFoundError
+from schedflow.core.metrics import render_prometheus
 from schedflow.core.scheduler import (
     STATE_PAUSED,
     STATE_RUNNING,
@@ -220,6 +222,16 @@ def scheduler_status(scheduler=Depends(_get_scheduler)):
             "state_name": _STATE_NAMES.get(scheduler.state, "UNKNOWN"),
             "job_count": len(scheduler.get_jobs()),
         }
+    )
+
+
+@router.get(
+    "/metrics", response_class=PlainTextResponse, include_in_schema=False
+)
+def metrics():
+    return PlainTextResponse(
+        render_prometheus(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
     )
 
 
