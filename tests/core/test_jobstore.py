@@ -133,6 +133,35 @@ def test_job_with_unresolvable_ref_is_kept():
     )
 
 
+def test_snapshot_crud_and_listing():
+    from schedflow.core.snapshot import RunSnapshot, TaskRecordSnapshot
+
+    store = make_store()
+    store.add(make_job())
+    first = RunSnapshot.start(
+        job_id="j1", execution_id="run-1", workflow_fingerprint="f"
+    )
+    second = RunSnapshot.start(
+        job_id="j1", execution_id="run-2", workflow_fingerprint="f"
+    )
+    first.set_node(
+        TaskRecordSnapshot(node_id="a", status="succeeded", result=1)
+    )
+
+    store.save_snapshot("j1", first)
+    store.save_snapshot("j1", second)
+
+    assert store.get_snapshot("j1", "run-1").records["a"].result == 1
+    assert [s.execution_id for s in store.list_snapshots("j1")] == [
+        "run-2",
+        "run-1",
+    ]
+
+    store.delete_snapshot("j1", "run-1")
+    assert store.get_snapshot("j1", "run-1") is None
+    assert store.list_snapshots("missing") == []
+
+
 def test_get_due_ignores_stale_heap_entries_after_update():
     """Rescheduling a job must not let the old run time fire again."""
     store = make_store()

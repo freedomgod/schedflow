@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from schedflow.core.job import Job
     from schedflow.core.log import ExecutionLog
+    from schedflow.core.snapshot import RunSnapshot
 
 
 class JobConflictError(Exception):
@@ -58,6 +59,20 @@ class JobStore(ABC):
     @abstractmethod
     def get_log(self, job_id: str, log_id: str) -> ExecutionLog | None: ...
 
+    def save_snapshot(self, job_id: str, snapshot: RunSnapshot) -> None:
+        raise NotImplementedError
+
+    def get_snapshot(
+        self, job_id: str, execution_id: str
+    ) -> RunSnapshot | None:
+        raise NotImplementedError
+
+    def list_snapshots(self, job_id: str) -> list[RunSnapshot]:
+        raise NotImplementedError
+
+    def delete_snapshot(self, job_id: str, execution_id: str) -> None:
+        raise NotImplementedError
+
     @abstractmethod
     def close(self) -> None: ...
 
@@ -68,6 +83,7 @@ class MemoryJobStore(JobStore):
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
         self._logs: dict[str, list[ExecutionLog]] = {}
+        self._snapshots: dict[str, dict[str, RunSnapshot]] = {}
         self._heap: list[tuple] = []
         self._versions: dict[str, int] = {}
         self._counter = itertools.count()
@@ -166,8 +182,28 @@ class MemoryJobStore(JobStore):
                 return log
         return None
 
+    def save_snapshot(self, job_id: str, snapshot: RunSnapshot) -> None:
+        self._snapshots.setdefault(job_id, {})[snapshot.execution_id] = snapshot
+
+    def get_snapshot(
+        self, job_id: str, execution_id: str
+    ) -> RunSnapshot | None:
+        return self._snapshots.get(job_id, {}).get(execution_id)
+
+    def list_snapshots(self, job_id: str) -> list[RunSnapshot]:
+        snapshots = self._snapshots.get(job_id, {}).values()
+        return sorted(
+            snapshots,
+            key=lambda snapshot: (snapshot.started_at, snapshot.execution_id),
+            reverse=True,
+        )
+
+    def delete_snapshot(self, job_id: str, execution_id: str) -> None:
+        self._snapshots.get(job_id, {}).pop(execution_id, None)
+
     def close(self) -> None:
         self._jobs.clear()
         self._logs.clear()
+        self._snapshots.clear()
         self._heap.clear()
         self._versions.clear()
