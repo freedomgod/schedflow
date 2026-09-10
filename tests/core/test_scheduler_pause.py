@@ -70,3 +70,19 @@ def test_resume_rearms_paused_job():
     assert resumed.status == "running"
     assert resumed.next_run_time is not None
     assert resumed.next_run_time > datetime.now(UTC) - timedelta(seconds=1)
+
+
+def test_start_repairs_legacy_armed_paused_job():
+    store = MemoryJobStore()
+    job = make_scheduler(store).add_job(
+        make_workflow(), trigger=IntervalTrigger(seconds=60), job_id="j1"
+    )
+    job.status = "paused"  # 历史坏数据：paused 但仍带 next_run_time
+
+    scheduler = make_scheduler(store)
+    scheduler.start()
+    try:
+        assert store.get("j1").next_run_time is None
+        assert store.get_next_run_time() is None
+    finally:
+        scheduler.shutdown(wait=False)

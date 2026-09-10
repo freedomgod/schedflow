@@ -642,6 +642,35 @@ class Scheduler:
         self._refresh_job_metrics()
         return job
 
+    def _repair_armed_paused_jobs(self) -> list[str]:
+        """Disarm jobs that are not running but still carry a next run time.
+
+        Older builds could re-arm a paused job (for example through a trigger
+        update), which left the scheduler executing jobs the UI reported as
+        disabled. Repairing at start keeps existing job stores consistent with
+        the ``status`` invariant.
+        """
+        repaired: list[str] = []
+        with self._lock:
+            stores = list(self._jobstores.values()) or [self._jobstore]
+            for store in stores:
+                for job in store.get_all():
+                    if job.status == "running" or job.next_run_time is None:
+                        continue
+                    self._disarm(job)
+                    try:
+                        store.update(job)
+                    except JobNotFoundError:
+                        continue
+                    repaired.append(job.job_id)
+        if repaired:
+            LOGGER.warning(
+                "disarmed %d non-running job(s) with stale next_run_time: %s",
+                len(repaired),
+                repaired,
+            )
+        return repaired
+
     def reschedule_job(self, job_id: str, trigger: Trigger) -> Job:
         return self.update_job(job_id, trigger=trigger)
 
@@ -920,6 +949,7 @@ class Scheduler:
         )
         self._stop_event.clear()
         self._wakeup_event.clear()
+        self._repair_armed_paused_jobs()
         self._thread = threading.Thread(
             target=self._main_loop,
             name="schedflow",
