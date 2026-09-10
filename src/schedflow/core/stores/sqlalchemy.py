@@ -65,7 +65,9 @@ class SQLAlchemyJobStore(JobStore):
             sa.Column("id", sa.String(191), primary_key=True),
             sa.Column("job_json", sa.Text, nullable=False),
             sa.Column("next_run_utc", sa.String(64), nullable=True),
+            sa.Column("status", sa.String(16), nullable=True),
             sa.Index("ix_jobs_next_run_utc", "next_run_utc"),
+            sa.Index("ix_jobs_status", "status"),
         )
         self.logs = sa.Table(
             "job_logs",
@@ -138,6 +140,27 @@ class SQLAlchemyJobStore(JobStore):
             except OperationalError as exc:
                 if "already exists" not in str(exc).lower():
                     raise
+        if "status" not in columns:
+            try:
+                with self._engine.begin() as connection:
+                    connection.execute(
+                        sa.text(
+                            "ALTER TABLE jobs ADD COLUMN status VARCHAR(16)"
+                        )
+                    )
+            except OperationalError as exc:
+                # Another thread/process won the migration race.
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        if "ix_jobs_status" not in index_names:
+            try:
+                with self._engine.begin() as connection:
+                    connection.execute(
+                        sa.text("CREATE INDEX ix_jobs_status ON jobs (status)")
+                    )
+            except OperationalError as exc:
+                if "already exists" not in str(exc).lower():
+                    raise
         if "job_run_snapshots" not in inspector.get_table_names():
             try:
                 self.snapshots.create(self._engine, checkfirst=True)
@@ -145,6 +168,24 @@ class SQLAlchemyJobStore(JobStore):
                 if "already exists" not in str(exc).lower():
                     raise
         self._backfill_next_run_utc()
+        self._backfill_status()
+
+    def _backfill_status(self) -> None:
+        """Populate status for rows written before the column existed."""
+        with self._engine.connect() as connection:
+            rows = connection.execute(
+                sa.select(self.jobs.c.id, self.jobs.c.job_json).where(
+                    self.jobs.c.status.is_(None)
+                )
+            ).all()
+        for job_id, raw in rows:
+            job = Job.from_dict(json.loads(raw))
+            with self._engine.begin() as connection:
+                connection.execute(
+                    self.jobs.update()
+                    .where(self.jobs.c.id == job_id)
+                    .values(status=job.status)
+                )
 
     def _backfill_next_run_utc(self) -> None:
         """Populate next_run_utc for rows written before the column existed."""
@@ -199,6 +240,7 @@ class SQLAlchemyJobStore(JobStore):
                         id=job.job_id,
                         job_json=json.dumps(job.to_dict(), ensure_ascii=False),
                         next_run_utc=self._next_run_utc(job),
+                        status=job.status,
                     )
                 )
         except IntegrityError:
@@ -216,6 +258,7 @@ class SQLAlchemyJobStore(JobStore):
                 .values(
                     job_json=json.dumps(job.to_dict(), ensure_ascii=False),
                     next_run_utc=self._next_run_utc(job),
+                    status=job.status,
                 )
             )
             if result.rowcount == 0:
@@ -250,6 +293,7 @@ class SQLAlchemyJobStore(JobStore):
                 .where(
                     self.jobs.c.next_run_utc.is_not(None),
                     self.jobs.c.next_run_utc <= now_utc,
+                    self.jobs.c.status == "running",
                 )
                 .order_by(self.jobs.c.next_run_utc)
             ).scalars().all()
@@ -269,7 +313,10 @@ class SQLAlchemyJobStore(JobStore):
         with self._engine.connect() as connection:
             raw = connection.execute(
                 sa.select(self.jobs.c.next_run_utc)
-                .where(self.jobs.c.next_run_utc.is_not(None))
+                .where(
+                    self.jobs.c.next_run_utc.is_not(None),
+                    self.jobs.c.status == "running",
+                )
                 .order_by(self.jobs.c.next_run_utc)
                 .limit(1)
             ).scalar_one_or_none()

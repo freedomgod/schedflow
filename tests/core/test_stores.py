@@ -116,6 +116,40 @@ class TestSQLAlchemyJobStore:
         sqlalchemy_store.add(job)
         assert sqlalchemy_store.get_next_run_time() == job.next_run_time
 
+    def test_get_due_ignores_paused_job_with_armed_time(self, sqlalchemy_store):
+        now = datetime.now(UTC)
+        job = make_job("paused-armed")
+        job.status = "paused"
+        job.next_run_time = now - timedelta(seconds=5)
+        sqlalchemy_store.add(job)
+
+        assert sqlalchemy_store.get_due(now) == []
+        assert sqlalchemy_store.get_next_run_time() is None
+
+    def test_backfills_status_column(self, tmp_path):
+        import sqlalchemy as sa
+
+        url = f"sqlite:///{tmp_path / 'legacy.db'}"
+        store = SQLAlchemyJobStore(url)
+        store.add(make_job())
+        with store._engine.begin() as connection:
+            connection.execute(sa.text("DROP INDEX ix_jobs_status"))
+            connection.execute(sa.text("ALTER TABLE jobs DROP COLUMN status"))
+        store.close()
+
+        reopened = SQLAlchemyJobStore(url)
+        try:
+            assert reopened.get_next_run_time() is not None
+            with reopened._engine.connect() as connection:
+                statuses = (
+                    connection.execute(sa.text("SELECT status FROM jobs"))
+                    .scalars()
+                    .all()
+                )
+            assert statuses == ["running"]
+        finally:
+            reopened.close()
+
     def test_log_roundtrip(self, sqlalchemy_store):
         sqlalchemy_store.add(make_job())
         log = ExecutionLog(flow_id="wf-j1", job_id="j1")
