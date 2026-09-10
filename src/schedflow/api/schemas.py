@@ -21,7 +21,7 @@ Models:
 
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class APIResponse(BaseModel):
@@ -155,6 +155,22 @@ class VariableUpdateRequest(BaseModel):
     name: str | None = None
     value: str | None = None
     description: str | None = None
+
+
+class WebhookConfigItem(BaseModel):
+    url: str
+    events: list[str] = Field(default_factory=lambda: ["*"])
+    secret: str | None = None
+    timeout: float | None = Field(default=None, gt=0)
+
+
+class WebhooksRequest(BaseModel):
+    webhooks: list[WebhookConfigItem] = Field(default_factory=list)
+
+
+class RateLimitRequest(BaseModel):
+    enabled: bool = False
+    rpm: int = Field(default=120, ge=1)
 
 
 class VariableItem(BaseModel):

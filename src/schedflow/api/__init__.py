@@ -22,8 +22,20 @@ async def _lifespan(app: FastAPI):
     restore_component_configs(scheduler)
     if scheduler.state == STATE_STOPPED:
         scheduler.start()
-    yield
-    scheduler.shutdown(wait=False)
+    from schedflow.core.webhook import WebhookEventSink
+    from schedflow.settings.services import get_webhooks_config
+
+    configs = get_webhooks_config()
+    sink = WebhookEventSink(configs) if configs else None
+    if sink is not None:
+        sink.start(scheduler)
+    app.state.webhook_sink = sink
+    try:
+        yield
+    finally:
+        if sink is not None:
+            sink.close()
+        scheduler.shutdown(wait=False)
 
 
 def create_app(

@@ -1,15 +1,17 @@
 import sqlite3
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from schedflow.api.schemas import (
     APIResponse,
+    RateLimitRequest,
     ThemeRequest,
     ThemeResponse,
     VariableCreateRequest,
     VariableItem,
     VariableUpdateRequest,
+    WebhooksRequest,
 )
 from schedflow.settings.models import (
     create_variable,
@@ -17,7 +19,14 @@ from schedflow.settings.models import (
     list_variables,
     update_variable,
 )
-from schedflow.settings.services import get_theme, set_theme
+from schedflow.settings.services import (
+    get_rate_limit_config,
+    get_theme,
+    get_webhooks_config,
+    set_rate_limit_config,
+    set_theme,
+    set_webhooks_config,
+)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -82,3 +91,60 @@ def variables_update(var_id: str, request: VariableUpdateRequest):
 def variables_delete(var_id: str):
     delete_variable(var_id)
     return APIResponse(message="Variable deleted")
+
+
+# ── Webhooks ──────────────────────────────────────────
+
+@router.get("/webhooks")
+def webhooks_get():
+    return APIResponse(data=get_webhooks_config())
+
+
+@router.put("/webhooks")
+def webhooks_set(request_body: WebhooksRequest, request: Request):
+    configs = [
+        item.model_dump(exclude_none=True)
+        for item in request_body.webhooks
+    ]
+    set_webhooks_config(configs)
+    _apply_webhook_sink(request, configs)
+    return APIResponse(data=configs)
+
+
+def _apply_webhook_sink(request: Request, configs: list[dict]) -> None:
+    from schedflow.core.webhook import WebhookEventSink
+
+    state = request.app.state
+    scheduler = getattr(state, "scheduler_api", None) or getattr(
+        state, "scheduler", None
+    )
+    sink = getattr(state, "webhook_sink", None)
+    if sink is None and configs and scheduler is not None:
+        sink = WebhookEventSink(configs)
+        sink.start(scheduler)
+        state.webhook_sink = sink
+        return
+    if sink is None:
+        return
+    if configs:
+        sink.reload(configs)
+    else:
+        sink.close()
+        state.webhook_sink = None
+
+
+# ── Rate limit ────────────────────────────────────────
+
+@router.get("/rate-limit")
+def rate_limit_get():
+    return APIResponse(data=get_rate_limit_config())
+
+
+@router.put("/rate-limit")
+def rate_limit_set(request_body: RateLimitRequest, request: Request):
+    config = request_body.model_dump()
+    set_rate_limit_config(config)
+    limiter = getattr(request.app.state, "rate_limiter", None)
+    if limiter is not None:
+        limiter.reload(config)
+    return APIResponse(data=get_rate_limit_config())
