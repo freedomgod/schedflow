@@ -143,6 +143,33 @@ def test_delete_job():
     assert client.get("/api/jobs/j1").status_code == 404
 
 
+def test_update_job_with_trigger_and_workflow():
+    client = make_client()
+    client.post(
+        "/api/jobs",
+        json={
+            "workflow": workflow_payload(),
+            "trigger": {"type": "interval", "args": {"seconds": 60}},
+            "job_id": "j1",
+        },
+    )
+
+    response = client.put(
+        "/api/jobs/j1",
+        json={
+            "name": "renamed",
+            "trigger": {"type": "cron", "args": {"minute": "*/5"}},
+            "workflow": workflow_payload("wf-updated"),
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["name"] == "renamed"
+    assert data["trigger"]["type"] == "cron"
+    assert data["workflow"]["flow_id"] == "wf-updated"
+
+
 def test_pause_resume_run_and_logs():
     client = make_client()
     client.post(

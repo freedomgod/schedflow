@@ -90,13 +90,18 @@ def update_job(
     request: JobUpdateRequest,
     scheduler=Depends(_get_scheduler),
 ):
-    changes = request.model_dump(exclude_none=True)
-    workflow = None
-    trigger = None
-    if "workflow" in changes:
-        workflow = changes.pop("workflow").to_workflow()
-    if "trigger" in changes:
-        trigger = changes.pop("trigger").to_trigger()
+    # Convert nested payloads while they are still pydantic models: after
+    # ``model_dump`` they are plain dicts and no longer expose the
+    # ``to_workflow`` / ``to_trigger`` converters.
+    workflow = (
+        request.workflow.to_workflow() if request.workflow is not None else None
+    )
+    trigger = (
+        request.trigger.to_trigger() if request.trigger is not None else None
+    )
+    changes = request.model_dump(
+        exclude_none=True, exclude={"workflow", "trigger"}
+    )
     try:
         job = scheduler.update_job(job_id, workflow=workflow, trigger=trigger, **changes)
     except JobNotFoundError as exc:
