@@ -247,6 +247,18 @@ app.add_middleware(AuthMiddleware, backends=[MyAuth()])
 
 Web API 目前未内置 SSE 路由，前端可基于 `GET /api/jobs/{job_id}/logs` 轮询，或订阅 SDK 事件自行实现推送。
 
+## 断点续跑与自动恢复
+
+```python
+first = scheduler.run_job_now("etl")             # 第一次执行可能失败
+resumed = scheduler.run_job_now("etl", mode="resume")
+print([node for node, rec in resumed.records.items() if rec.resumed])
+```
+
+`resume` 使用最近一份未终结（running/failed）快照；只有 fingerprint 一致才会
+执行。将 `Job.on_restart` 设为 `resume` 或 `rerun`，调度器启动时会自动处理上次
+中断的运行。完整可运行示例见 `examples/resume_execution_example.py`。
+
 ## 自定义组件
 
 自定义组件通过**继承公开基类**实现，直接以实例注入，无需注册入口点：

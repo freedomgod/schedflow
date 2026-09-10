@@ -241,6 +241,26 @@ its status becomes `completed`, `next_run_time` is cleared and the job stays in 
 JobStore. History remains visible; you may delete it explicitly or run it again
 with `run_job_now`. Only an explicit `reschedule_job` with a new trigger re-enables it.
 
+### Run snapshots / restart policy / timeout
+
+```python
+job = scheduler.add_job(
+    workflow,
+    trigger=IntervalTrigger(seconds=3600),
+    job_id="my_job",
+    on_restart="resume",       # none | resume | rerun
+    workflow_timeout=300,      # wall-clock limit for the whole DAG (seconds)
+)
+
+log = scheduler.run_job_now("my_job", mode="resume")  # only failed/unfinished nodes
+runs = scheduler.list_job_runs("my_job")              # execution_id/mode/status
+```
+
+`mode="resume"` only runs when the workflow fingerprint still matches the
+snapshot; a changed DAG raises `DagChangedError` instead of silently re-running
+everything. Running snapshots are queryable during execution; the immutable
+`ExecutionLog` is available afterwards.
+
 ### Execution logs
 
 ```python

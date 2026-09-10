@@ -5573,6 +5573,7 @@ Redis / MongoDB</text>
           <li>&bull; 用户 / 调用方经 REST / SSE 创建、管理与查看定时工作流</li>
           <li>&bull; Scheduler 到期后按 executor_alias 派发，Executor 运行 Workflow DAG</li>
           <li>&bull; 节点结果汇总为 ExecutionLog，并持久化到 JobStore</li>
+          <li>&bull; 运行快照（RunSnapshot）支撑 full/resume 断点续跑与 on_restart 自动恢复</li>
         </ul>
       </div>
 
@@ -5597,6 +5598,7 @@ Redis / MongoDB</text>
           <li>&bull; “用户 / 调用方”泛指仓库外的 Web UI、CLI 等接入端</li>
           <li>&bull; 触发器、执行器、存储器走静态注册表扩展</li>
           <li>&bull; 认证（JWT / API Key）保护管理与执行接口</li>
+          <li>&bull; workflow_timeout 提供 DAG 级墙钟总超时</li>
         </ul>
       </div>
     </div>

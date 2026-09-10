@@ -73,6 +73,17 @@ executor 调用 job.run() → workflow.run(max_workers=...) → 拓扑分组 →
 Web API / 前端消费：/api/jobs、/api/jobs/{id}/logs
 ```
 
+## 运行快照与断点续跑
+
+每次执行都会创建一个可变的 **RunSnapshot**（execution_id、workflow fingerprint、
+节点状态与已成功节点结果），并在每个节点结束时更新；执行结束后生成不可变的
+`ExecutionLog`。因此可以：
+
+- `run_job_now(job_id, mode="resume")` 只重跑失败/未完成节点，已成功节点标记
+  `resumed=True` 并继续向下游注入结果；
+- 通过 `Job.on_restart = none|resume|rerun` 控制进程重启后的自动恢复策略；
+- 通过 `Job.workflow_timeout` 或 `run(timeout=...)` 给整个 DAG 设置墙钟上限。
+
 ## 项目状态
 
 - 核心（Workflow / Trigger / Job / Scheduler / JobStore / Executor / Web API）均已可用并通过测试；

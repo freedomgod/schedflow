@@ -244,6 +244,25 @@ scheduler.cancel_job("my_job")
 `next_run_time` 置空并保留在 JobStore。用户可继续查看历史日志，也可显式删除或通过
 `run_job_now` 手动重跑；只有显式 `reschedule_job` 传入新触发器才会重新启用。
 
+### 运行快照 / 恢复策略 / 总超时
+
+```python
+job = scheduler.add_job(
+    workflow,
+    trigger=IntervalTrigger(seconds=3600),
+    job_id="my_job",
+    on_restart="resume",       # none | resume | rerun
+    workflow_timeout=300,      # 整个 DAG 的墙钟上限（秒）
+)
+
+log = scheduler.run_job_now("my_job", mode="resume")  # 只重跑失败/未完成节点
+runs = scheduler.list_job_runs("my_job")              # 运行概览（execution_id/mode/status）
+```
+
+`mode="resume"` 只在 workflow fingerprint 与快照一致时生效；DAG 已变更会返回
+`DagChangedError`，不会静默全量重跑。运行中可查询快照视图，结束后可查询
+`ExecutionLog`。
+
 ### 执行日志
 
 ```python

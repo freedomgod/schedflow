@@ -11,6 +11,7 @@ examples/
 ├── quick_start_guide.py           # 快速入门指南（推荐先看）
 ├── basic_workflow_example.py      # 基础工作流：并行下载 -> 处理 -> 聚合
 ├── advanced_workflow_example.py   # 高级特性：重试 / 条件边 / 混合任务类型 / 事件
+├── resume_execution_example.py    # 断点续跑：失败后 resume 只重跑未完成节点
 └── workflow/
     ├── run_trigger.py             # 触发器用法
     └── modelmixin_meta.py         # BaseModelMixin / 触发器模型元数据
@@ -23,6 +24,7 @@ cd /path/to/schedflow
 python examples/quick_start_guide.py
 python examples/basic_workflow_example.py
 python examples/advanced_workflow_example.py
+python examples/resume_execution_example.py
 ```
 
 ## 核心概念

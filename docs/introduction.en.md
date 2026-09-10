@@ -80,6 +80,17 @@ ExecutionLog → jobstore.add_log() → job.succeeded / job.failed events
 consumed by Web API / frontend: /api/jobs, /api/jobs/{id}/logs
 ```
 
+## Run snapshots and resume
+
+Every execution creates a mutable **RunSnapshot** (execution id, workflow
+fingerprint, node statuses and results of succeeded nodes) and updates it as nodes
+finish; a final immutable `ExecutionLog` is produced at the end. This enables:
+
+- `run_job_now(job_id, mode="resume")` re-runs only failed/unfinished nodes while
+  recovered nodes carry `resumed=True` and keep feeding downstream `_pre_results`;
+- `Job.on_restart = none|resume|rerun` controls automatic recovery after a restart;
+- `Job.workflow_timeout` or `run(timeout=...)` bounds the whole DAG by wall clock.
+
 ## Project status
 
 - The core (Workflow / Trigger / Job / Scheduler / JobStore / Executor / Web API) is usable and tested;

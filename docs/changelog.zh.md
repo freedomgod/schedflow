@@ -9,6 +9,11 @@
 - **一次性任务保留**：单次触发器执行完成后任务置为 `completed` 并保留在存储中，不再自动删除；
 - **调度可靠性**：Memory/SQLAlchemy/MongoDB 到期查询改为索引结构，主循环错误与事件监听器
   异常不再静默吞掉；
+- **运行快照与断点续跑**：新增 `RunSnapshot`（四类 JobStore 持久化）、
+  `run(mode="resume")`、`resumes_from`/`resumed` 记录、`DagChangedError` 保护；
+  `Job.on_restart` 支持 none/resume/rerun 自动恢复；
+- **工作流级总超时**：`Workflow.run(timeout=...)` / `Job.workflow_timeout`，
+  超时节点标记 `workflow_timeout`；
 - **`Workflow`**：以 `add_task()/add_edge()` 构建 DAG，支持拓扑分层并行、条件边、环路检测（`CycleError`）、`_pre_results` 注入、重试/超时/回调，`to_dict()/from_dict()` 作为唯一 JSON 序列化出口；
 - **`TaskSpec`**：四种任务类型 `python_callable` / `python` / `python_script` / `bash`，子进程任务支持环境变量、工作目录、超时；
 - **`ExecutionLog` / `TaskRecord`**：结构化执行日志，记录每个节点的状态、结果、错误、stdout/stderr、退出码与耗时；

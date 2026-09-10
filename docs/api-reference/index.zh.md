@@ -10,6 +10,16 @@
   不再自动删除；
 - `POST /api/jobs` / `PUT /api/jobs/{job_id}` 接受 `priority` 字段。
 
+## P1 行为说明（运行快照 / 恢复 / 超时）
+
+- `POST /api/jobs/{job_id}/run` 请求体支持 `{"mode": "full"|"resume", "timeout": 秒}`；
+  resume 无可用快照或 DAG 已变更时返回 409；
+- `GET /api/jobs/{job_id}/runs` 返回运行概览（execution_id / mode / resumes_from /
+  status / started_at / ended_at）；
+- `GET /api/jobs/{job_id}/runs/{execution_id}` 运行中返回 RunSnapshot，结束后返回
+  ExecutionLog；
+- `ExecutionLog` 新增 `mode`、`resumes_from`，`TaskRecord` 新增 `resumed`。
+
 ## 核心对象（schedflow.core）
 
 ### 工作流（Workflow）

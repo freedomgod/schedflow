@@ -9,6 +9,8 @@
 - **一次性任务保留**：单次触发器耗尽后任务置为 `completed` 并保留，不再自动删除；
 - **调度可靠性**：Memory/SQLAlchemy/MongoDB 到期查询改为索引结构；主循环与
   EventBus 监听器异常可见化。
+- **运行快照与断点续跑**：RunSnapshot（四类 JobStore 持久化）、full/resume
+  执行模式、`on_restart` 自动恢复、`workflow_timeout` 总超时。
 
 ## 0.0.1 (2026-08-08)
 

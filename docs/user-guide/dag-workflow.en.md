@@ -148,6 +148,19 @@ further nodes are dispatched once the event is set; pending nodes become
 `cancelled` (`skip_reason="job_cancelled"`), so `ExecutionLog.succeeded` is `False`
 and `log.cancelled` is `True`. Nodes already running are never force-interrupted.
 
+## Resume runs and workflow timeout
+
+```python
+log = workflow.run(mode="resume", resume_from_snapshot=snapshot, timeout=300)
+```
+
+- `mode="resume"`: nodes marked `succeeded` in the snapshot are not re-executed;
+  they are recorded with `resumed=True` and still feed downstream `_pre_results`;
+  a fingerprint mismatch raises `DagChangedError`;
+- `timeout`: wall-clock limit for the whole DAG; pending nodes become `skipped`
+  with `skip_reason="workflow_timeout"`, `log.timed_out` is true and
+  `log.succeeded` is false.
+
 ## Retries, timeouts and callbacks
 
 ```python

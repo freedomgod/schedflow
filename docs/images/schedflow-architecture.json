@@ -201,7 +201,8 @@
       "items": [
         "用户 / 调用方经 REST / SSE 创建、管理与查看定时工作流",
         "Scheduler 到期后按 executor_alias 派发，Executor 运行 Workflow DAG",
-        "节点结果汇总为 ExecutionLog，并持久化到 JobStore"
+        "节点结果汇总为 ExecutionLog，并持久化到 JobStore",
+        "运行快照（RunSnapshot）支撑 full/resume 断点续跑与 on_restart 自动恢复"
       ]
     },
     {
@@ -219,7 +220,8 @@
       "items": [
         "“用户 / 调用方”泛指仓库外的 Web UI、CLI 等接入端",
         "触发器、执行器、存储器走静态注册表扩展",
-        "认证（JWT / API Key）保护管理与执行接口"
+        "认证（JWT / API Key）保护管理与执行接口",
+        "workflow_timeout 提供 DAG 级墙钟总超时"
       ]
     }
   ]

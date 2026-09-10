@@ -248,6 +248,19 @@ app.add_middleware(AuthMiddleware, backends=[MyAuth()])
 
 The Web API does not currently ship an SSE route. A frontend can poll `GET /api/jobs/{job_id}/logs` or implement push from the SDK events.
 
+## Resume runs and automatic recovery
+
+```python
+first = scheduler.run_job_now("etl")             # may fail on the first run
+resumed = scheduler.run_job_now("etl", mode="resume")
+print([node for node, rec in resumed.records.items() if rec.resumed])
+```
+
+`resume` uses the latest unfinished (running/failed) snapshot and only runs when
+the workflow fingerprint still matches. Set `Job.on_restart` to `resume` or
+`rerun` to handle interrupted runs automatically when the scheduler starts.
+See `examples/resume_execution_example.py` for a complete runnable example.
+
 ## Custom components
 
 Custom components are implemented by **subclassing the public base classes** and injecting instances directly — no entry points required:

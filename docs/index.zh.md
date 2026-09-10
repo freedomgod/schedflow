@@ -22,7 +22,7 @@ SchedFlow 是一个轻量级的 **DAG 工作流调度框架**：一个“作业�
 | **DAG 工作流** | `Workflow` 定义节点与依赖边：拓扑排序执行、同层并行、条件边、环路检测 |
 | **任务类型** | Python 可调用对象 / `"模块:函数"` 字符串引用、`.py` 脚本文件、内联代码片段、Shell 命令 |
 | **显式 API** | 所有公开方法均为显式关键字签名；`func` 直接传可调用对象，字符串引用延迟到执行时解析 |
-| **作业管理** | Job 优先级派发、协作式取消、单次任务执行后保留为 `completed`（不再删除） |
+| **作业管理** | 优先级派发、协作式取消、单次任务保留 `completed`、运行快照 full/resume 断点续跑、`on_restart` 自动恢复与工作流总超时 |
 | **触发器** | `DateTrigger` / `IntervalTrigger` / `CronTrigger` / `CalendarIntervalTrigger` / `AndTrigger` / `OrTrigger`，统一支持 `to_dict()/from_dict()` |
 | **持久化** | `MemoryJobStore` / `SQLAlchemyJobStore` / `RedisJobStore` / `MongoDBJobStore`，统一 JSON 序列化，引用不预先解析 |
 | **执行器** | `ThreadPoolExecutor` / `ProcessPoolExecutor`（JSON worker 协议，Windows 可用）/ `DebugExecutor` / `AsyncIOExecutor` 等 |

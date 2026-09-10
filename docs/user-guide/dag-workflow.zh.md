@@ -148,6 +148,18 @@ wf.add_edge("check", "next", condition=should_continue)
 `ExecutionLog.succeeded` 为 `False`、`log.cancelled` 为 `True`。正在运行的节点
 不做强制中断。
 
+## 恢复执行与总超时
+
+```python
+log = workflow.run(mode="resume", resume_from_snapshot=snapshot, timeout=300)
+```
+
+- `mode="resume"`：快照中 `succeeded` 的节点不会重跑，记录为 `resumed=True`，
+  其结果仍注入下游 `_pre_results`；fingerprint 不一致会抛 `DagChangedError`；
+- `timeout`：整个 DAG 的墙钟上限，超时后未执行节点标记
+  `skipped`（`skip_reason="workflow_timeout"`），`log.timed_out` 为 True，
+  `log.succeeded` 为 False。
+
 ## 重试、超时与回调
 
 ```python

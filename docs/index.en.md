@@ -22,7 +22,7 @@ SchedFlow is a lightweight **DAG workflow scheduling framework**: a "job" is no 
 | **DAG workflows** | `Workflow` defines nodes and dependency edges: topological execution, same-generation parallelism, conditional edges, cycle detection |
 | **Task types** | Python callables / `"module:function"` string refs, `.py` script files, inline snippets, shell commands |
 | **Explicit API** | Every public method uses explicit keyword signatures; pass callables directly, string refs resolve lazily at run time |
-| **Job management** | Priority dispatch, cooperative cancellation, and one-shot jobs kept as `completed` instead of deleted |
+| **Job management** | Priority dispatch, cooperative cancellation, one-shot retention, run snapshots with full/resume, `on_restart` recovery and workflow timeout |
 | **Triggers** | `DateTrigger` / `IntervalTrigger` / `CronTrigger` / `CalendarIntervalTrigger` / `AndTrigger` / `OrTrigger` with unified `to_dict()/from_dict()` |
 | **Persistence** | `MemoryJobStore` / `SQLAlchemyJobStore` / `RedisJobStore` / `MongoDBJobStore`, unified JSON serialization, refs never resolved on load |
 | **Executors** | `ThreadPoolExecutor` / `ProcessPoolExecutor` (JSON worker protocol, Windows-ready) / `DebugExecutor` |
