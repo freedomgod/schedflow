@@ -63,6 +63,16 @@ def create_app(
             backends=[JWTBackend(), APIKeyBackend()],
         )
 
+    from schedflow.api.middleware import (
+        RateLimitMiddleware,
+        TokenBucketLimiter,
+    )
+    from schedflow.settings.services import get_rate_limit_config
+
+    rate_limiter = TokenBucketLimiter(get_rate_limit_config())
+    app.state.rate_limiter = rate_limiter
+    app.add_middleware(RateLimitMiddleware, limiter=rate_limiter)
+
     if include_routers:
         from schedflow.api.rest.routers import router as rest_router
         from schedflow.api.routers.auth import router as auth_router

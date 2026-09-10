@@ -160,3 +160,48 @@ class TestQueryParamAuth:
         with TestClient(app) as client:
             resp = client.get("/api/v1/settings/theme")
             assert resp.status_code == 403
+
+
+def test_token_bucket_limiter_rejects_after_capacity():
+    from schedflow.api.middleware import TokenBucketLimiter
+
+    limiter = TokenBucketLimiter({"enabled": True, "rpm": 1})
+
+    assert limiter.allow("client")[0] is True
+    allowed, retry_after = limiter.allow("client")
+    assert allowed is False
+    assert retry_after > 0
+
+
+def test_rate_limit_middleware_returns_429_for_write_requests():
+    from schedflow.api import create_app
+    from schedflow.core import Scheduler
+    from schedflow.settings.services import set_rate_limit_config
+
+    set_rate_limit_config({"enabled": True, "rpm": 1})
+    try:
+        app = create_app(Scheduler(), include_auth=False)
+        payload = {
+            "workflow": {
+                "flow_id": "rate",
+                "nodes": [
+                    {
+                        "node_id": "a",
+                        "task": {
+                            "type": "python_callable",
+                            "ref": "os:getcwd",
+                        },
+                    }
+                ],
+                "edges": [],
+            },
+            "job_id": "rate-job",
+        }
+        with TestClient(app, raise_server_exceptions=False) as client:
+            assert client.post("/api/jobs", json=payload).status_code == 200
+            blocked = client.post("/api/jobs", json=payload)
+            assert blocked.status_code == 429
+            assert "Retry-After" in blocked.headers
+            assert client.get("/api/jobs").status_code == 200
+    finally:
+        set_rate_limit_config({"enabled": False, "rpm": 120})
