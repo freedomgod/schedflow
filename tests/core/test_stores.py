@@ -294,6 +294,102 @@ class TestMongoDBJobStore:
         finally:
             store.close()
 
+
+class _StubPipeline:
+    def __init__(self, client: "_StubRedis") -> None:
+        self._client = client
+        self._ops: list[tuple] = []
+
+    def hset(self, key, field, value):
+        self._ops.append(("hset", key, field, value))
+        return self
+
+    def zadd(self, key, mapping):
+        self._ops.append(("zadd", key, mapping))
+        return self
+
+    def zrem(self, key, member):
+        self._ops.append(("zrem", key, member))
+        return self
+
+    def execute(self) -> None:
+        for name, *args in self._ops:
+            getattr(self._client, name)(*args)
+        self._ops.clear()
+
+
+class _StubRedis:
+    """In-memory stand-in for the Redis commands RedisJobStore uses.
+
+    The real Redis server is not available in every environment, so filtering
+    behaviour is asserted against this minimal client instead of skipping.
+    """
+
+    def __init__(self) -> None:
+        self.hashes: dict[str, dict] = {}
+        self.zsets: dict[str, dict] = {}
+
+    def pipeline(self) -> _StubPipeline:
+        return _StubPipeline(self)
+
+    def hexists(self, key, field) -> bool:
+        return field in self.hashes.get(key, {})
+
+    def hset(self, key, field, value) -> None:
+        self.hashes.setdefault(key, {})[field] = value
+
+    def hget(self, key, field):
+        return self.hashes.get(key, {}).get(field)
+
+    def hgetall(self, key) -> dict:
+        return dict(self.hashes.get(key, {}))
+
+    def hdel(self, key, field) -> None:
+        self.hashes.get(key, {}).pop(field, None)
+
+    def zadd(self, key, mapping) -> None:
+        self.zsets.setdefault(key, {}).update(mapping)
+
+    def zrem(self, key, member) -> None:
+        self.zsets.get(key, {}).pop(member, None)
+
+    def zrangebyscore(self, key, minimum, maximum) -> list:
+        items = self.zsets.get(key, {})
+        return [
+            member
+            for member, score in sorted(items.items(), key=lambda item: item[1])
+            if minimum <= score <= maximum
+        ]
+
+    def zrange(self, key, start, stop, withscores=False):
+        items = sorted(
+            self.zsets.get(key, {}).items(), key=lambda item: item[1]
+        )
+        selected = items[start:] if stop == -1 else items[start : stop + 1]
+        return selected if withscores else [member for member, _ in selected]
+
+    def close(self) -> None:  # pragma: no cover - symmetry with redis.Redis
+        pass
+
+
+def test_lookups_ignore_paused_job_with_stub_client():
+    store = RedisJobStore(host="localhost", port=6379, db=15)
+    store._redis = _StubRedis()
+    try:
+        now = datetime.now(UTC)
+        active = make_job("active")
+        active.next_run_time = now - timedelta(seconds=1)
+        paused = make_job("paused")
+        paused.status = "paused"
+        paused.next_run_time = now - timedelta(seconds=1)
+        store.add(active)
+        store.add(paused)
+
+        assert [job.job_id for job in store.get_due(now)] == ["active"]
+        assert store.get_next_run_time() == active.next_run_time
+    finally:
+        store.close()
+
     def test_get_due_uses_indexed_utc_field(self):
         store = MongoDBJobStore(
             host="localhost", port=27017, database="schedflow_test"

@@ -53,6 +53,7 @@ class MongoDBJobStore(JobStore):
         if self._indexes_ensured:
             return
         self._collection.create_index("next_run_utc", background=True)
+        self._collection.create_index("status", background=True)
         self._snapshots_collection.create_index(
             [("job_id", 1), ("started_at", -1)], background=True
         )
@@ -76,6 +77,16 @@ class MongoDBJobStore(JobStore):
                 {"$set": {"next_run_utc": value}},
             )
 
+    def _backfill_status(self) -> None:
+        """Populate status for documents written before the field existed."""
+        missing = self._collection.find({"status": {"$exists": False}})
+        for document in missing:
+            job = Job.from_dict(json.loads(document["job_json"]))
+            self._collection.update_one(
+                {"_id": job.job_id},
+                {"$set": {"status": job.status}},
+            )
+
     def add(self, job: Job) -> None:
         try:
             self._collection.insert_one(
@@ -83,6 +94,7 @@ class MongoDBJobStore(JobStore):
                     "_id": job.job_id,
                     "job_json": json.dumps(job.to_dict(), ensure_ascii=False),
                     "next_run_utc": self._next_run_utc(job),
+                    "status": job.status,
                 }
             )
         except DuplicateKeyError:
@@ -95,6 +107,7 @@ class MongoDBJobStore(JobStore):
                 "$set": {
                     "job_json": json.dumps(job.to_dict(), ensure_ascii=False),
                     "next_run_utc": self._next_run_utc(job),
+                    "status": job.status,
                 }
             },
         )
@@ -115,9 +128,13 @@ class MongoDBJobStore(JobStore):
     def get_due(self, now: datetime) -> list[Job]:
         self._ensure_indexes()
         self._backfill_next_run_utc()
+        self._backfill_status()
         now_utc = now.astimezone(UTC).isoformat()
         documents = self._collection.find(
-            {"next_run_utc": {"$type": "string", "$lte": now_utc}}
+            {
+                "next_run_utc": {"$type": "string", "$lte": now_utc},
+                "status": "running",
+            }
         ).sort("next_run_utc", 1)
         return [
             Job.from_dict(json.loads(document["job_json"]))
@@ -136,8 +153,12 @@ class MongoDBJobStore(JobStore):
     def get_next_run_time(self) -> datetime | None:
         self._ensure_indexes()
         self._backfill_next_run_utc()
+        self._backfill_status()
         document = self._collection.find_one(
-            {"next_run_utc": {"$exists": True, "$ne": None}},
+            {
+                "next_run_utc": {"$exists": True, "$ne": None},
+                "status": "running",
+            },
             sort=[("next_run_utc", 1)],
         )
         if document is None:

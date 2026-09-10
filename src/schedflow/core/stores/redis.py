@@ -97,7 +97,8 @@ class RedisJobStore(JobStore):
         job_ids = self._redis.zrangebyscore(
             self._run_times_key, 0, now.timestamp()
         )
-        return [job for job in (self.get(job_id) for job_id in job_ids) if job]
+        jobs = (self.get(job_id) for job_id in job_ids)
+        return [job for job in jobs if job is not None and job.status == "running"]
 
     def get_all(self) -> list[Job]:
         raw = self._redis.hgetall(self._jobs_key)
@@ -110,12 +111,13 @@ class RedisJobStore(JobStore):
         return scheduled + paused
 
     def get_next_run_time(self) -> datetime | None:
-        items = self._redis.zrange(
-            self._run_times_key, 0, 0, withscores=True
-        )
-        if not items:
-            return None
-        return datetime.fromtimestamp(items[0][1], tz=UTC)
+        for job_id, score in self._redis.zrange(
+            self._run_times_key, 0, -1, withscores=True
+        ):
+            job = self.get(job_id)
+            if job is not None and job.status == "running":
+                return datetime.fromtimestamp(score, tz=UTC)
+        return None
 
     def add_log(self, job_id: str, log: ExecutionLog) -> None:
         self._redis.rpush(
