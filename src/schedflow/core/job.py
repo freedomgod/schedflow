@@ -107,6 +107,7 @@ class Job:
             timeout=request.timeout,
             resume_from_snapshot=resume_snapshot,
             on_node_finished=on_node_finished,
+            log_id=request.execution_id,
         )
         log.job_id = self.job_id
         return log

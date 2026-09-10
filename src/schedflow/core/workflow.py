@@ -191,6 +191,7 @@ class Workflow:
         resume_from_snapshot=None,
         timeout: float | None = None,
         on_node_finished=None,
+        log_id: str | None = None,
     ) -> ExecutionLog:
         """Execute the workflow directly (without a scheduler).
 
@@ -221,6 +222,7 @@ class Workflow:
 
         log = ExecutionLog(
             flow_id=self.flow_id,
+            log_id=log_id,
             mode=mode,
             resumes_from=(
                 resume_from_snapshot.execution_id

@@ -11,6 +11,7 @@ class RunRequest:
     timeout: float | None = None
     resume_execution_id: str | None = None
     resume_snapshot: dict | None = None
+    execution_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.mode not in {"full", "resume"}:
@@ -22,6 +23,7 @@ class RunRequest:
             "timeout": self.timeout,
             "resume_execution_id": self.resume_execution_id,
             "resume_snapshot": self.resume_snapshot,
+            "execution_id": self.execution_id,
         }
 
     @classmethod
@@ -32,4 +34,5 @@ class RunRequest:
             timeout=data.get("timeout"),
             resume_execution_id=data.get("resume_execution_id"),
             resume_snapshot=data.get("resume_snapshot"),
+            execution_id=data.get("execution_id"),
         )
