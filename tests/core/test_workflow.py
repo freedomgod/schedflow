@@ -320,3 +320,89 @@ def test_run_cancel_event_set_before_start_marks_all_cancelled():
         record.status == "cancelled"
         for record in log.records.values()
     )
+
+
+def test_run_resume_skips_succeeded_nodes_and_keeps_results():
+    from schedflow.core.snapshot import RunSnapshot, TaskRecordSnapshot
+
+    attempts = {"a": 0, "b": 0}
+
+    def bump_a():
+        attempts["a"] += 1
+        return "A"
+
+    def read_a(_pre_results):
+        attempts["b"] += 1
+        return _pre_results["a"] + "B"
+
+    wf = Workflow("resume")
+    wf.add_task("a", func=bump_a)
+    wf.add_task("b", func=read_a)
+    wf.add_edge("a", "b")
+
+    snapshot = RunSnapshot.start(
+        job_id="j1",
+        execution_id="run-0",
+        workflow_fingerprint=wf.fingerprint(),
+        status="failed",
+    )
+    snapshot.set_node(
+        TaskRecordSnapshot(node_id="a", status="succeeded", result="A")
+    )
+
+    log = wf.run(mode="resume", resume_from_snapshot=snapshot)
+
+    assert attempts == {"a": 0, "b": 1}
+    assert log.records["a"].status == "succeeded"
+    assert log.records["a"].resumed is True
+    assert log.records["a"].result == "A"
+    assert log.records["b"].result == "AB"
+    assert log.mode == "resume"
+    assert log.resumes_from == "run-0"
+
+
+def test_run_resume_rejects_changed_dag():
+    import pytest
+
+    from schedflow.core.snapshot import DagChangedError, RunSnapshot
+
+    wf = Workflow("resume")
+    wf.add_task("a", func="os:getcwd")
+    snapshot = RunSnapshot.start(
+        job_id="j1",
+        execution_id="run-0",
+        workflow_fingerprint="different",
+    )
+
+    with pytest.raises(DagChangedError):
+        wf.run(mode="resume", resume_from_snapshot=snapshot)
+
+
+def test_run_workflow_timeout_marks_pending_skipped():
+    import time
+
+    wf = Workflow("timeout")
+    wf.add_task("slow", func=lambda: time.sleep(0.2))
+    wf.add_task("later", func=lambda: 1)
+    wf.add_edge("slow", "later")
+
+    log = wf.run(timeout=0.05)
+
+    assert log.records["later"].status == "skipped"
+    assert log.records["later"].skip_reason == "workflow_timeout"
+    assert log.timed_out is True
+    assert log.succeeded is False
+
+
+def test_run_node_callback_sees_each_completed_node():
+    wf = Workflow("cb")
+    wf.add_task("a", func=lambda: 1)
+    seen = []
+
+    wf.run(
+        on_node_finished=lambda node_id, record: seen.append(
+            (node_id, record.status)
+        )
+    )
+
+    assert seen == [("a", "succeeded")]

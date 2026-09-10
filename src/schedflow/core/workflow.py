@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from schedflow.core.context import RunContext
 from schedflow.core.log import ExecutionLog, TaskRecord
 from schedflow.core.resolve import resolve_ref
 from schedflow.core.result import TaskResult
+from schedflow.core.snapshot import DagChangedError
 from schedflow.core.spec import TaskSpec
 
 
@@ -185,6 +187,10 @@ class Workflow:
         executor: str = "thread",
         inputs: dict | None = None,
         cancel_event=None,
+        mode: str = "full",
+        resume_from_snapshot=None,
+        timeout: float | None = None,
+        on_node_finished=None,
     ) -> ExecutionLog:
         """Execute the workflow directly (without a scheduler).
 
@@ -200,16 +206,53 @@ class Workflow:
                 "ProcessPoolExecutor, not by Workflow.run()"
             )
 
-        log = ExecutionLog(flow_id=self.flow_id)
+        if mode not in {"full", "resume"}:
+            raise ValueError(f"Unknown run mode {mode!r}")
+        if mode == "resume":
+            if resume_from_snapshot is None:
+                raise ValueError("mode='resume' requires a snapshot")
+            if (
+                resume_from_snapshot.workflow_fingerprint
+                != self.fingerprint()
+            ):
+                raise DagChangedError(
+                    "Workflow definition changed since the snapshot was taken"
+                )
+
+        log = ExecutionLog(
+            flow_id=self.flow_id,
+            mode=mode,
+            resumes_from=(
+                resume_from_snapshot.execution_id
+                if resume_from_snapshot is not None
+                else None
+            ),
+        )
         log.dag_snapshot = self._snapshot()
         log.records = {
             node_id: TaskRecord(node_id=node_id, task_id=node_id)
             for node_id in self._nodes
         }
+        if resume_from_snapshot is not None:
+            for node_id, snapshot_record in (
+                resume_from_snapshot.records.items()
+            ):
+                if snapshot_record.status == "succeeded":
+                    log.records[node_id] = TaskRecord(
+                        node_id=node_id,
+                        task_id=node_id,
+                        status="succeeded",
+                        result=snapshot_record.result,
+                        resumed=True,
+                    )
 
+        deadline = time.monotonic() + timeout if timeout is not None else None
         for generation in self._generations():
             if cancel_event is not None and cancel_event.is_set():
                 self._mark_pending_cancelled(log)
+                break
+            if self._deadline_exceeded(deadline):
+                self._mark_pending_skipped(log, "workflow_timeout")
                 break
             self._execute_generation(
                 generation,
@@ -217,17 +260,31 @@ class Workflow:
                 max_workers=max_workers,
                 inputs=inputs or {},
                 cancel_event=cancel_event,
+                deadline=deadline,
+                on_node_finished=on_node_finished,
             )
             if cancel_event is not None and cancel_event.is_set():
                 self._mark_pending_cancelled(log)
                 break
+            if self._deadline_exceeded(deadline):
+                self._mark_pending_skipped(log, "workflow_timeout")
+                break
         log.finalize()
         return log
+
+    @staticmethod
+    def _deadline_exceeded(deadline: float | None) -> bool:
+        return deadline is not None and time.monotonic() >= deadline
 
     def _mark_pending_cancelled(self, log: ExecutionLog) -> None:
         for record in log.records.values():
             if record.status == "pending":
                 record.mark_cancelled("job_cancelled")
+
+    def _mark_pending_skipped(self, log: ExecutionLog, reason: str) -> None:
+        for record in log.records.values():
+            if record.status == "pending":
+                record.mark_skipped(reason)
 
     def _snapshot(self) -> dict:
         """Best-effort DAG snapshot for execution logs.
@@ -270,18 +327,28 @@ class Workflow:
         max_workers: int,
         inputs: dict,
         cancel_event=None,
+        deadline: float | None = None,
+        on_node_finished=None,
     ) -> None:
         futures: dict[concurrent.futures.Future, str] = {}
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=max_workers
         ) as pool:
             for node_id in generation:
+                if log.records[node_id].status == "succeeded":
+                    continue
                 if cancel_event is not None and cancel_event.is_set():
                     log.records[node_id].mark_cancelled("job_cancelled")
+                    self._notify_node(on_node_finished, node_id, log)
+                    continue
+                if self._deadline_exceeded(deadline):
+                    log.records[node_id].mark_skipped("workflow_timeout")
+                    self._notify_node(on_node_finished, node_id, log)
                     continue
                 if not self._check_preconditions(node_id, log):
                     reason = self._skip_reason(node_id, log)
                     log.records[node_id].mark_skipped(reason)
+                    self._notify_node(on_node_finished, node_id, log)
                     continue
                 # Mark started before the node actually runs so the recorded
                 # duration covers the real execution window.
@@ -294,6 +361,12 @@ class Workflow:
                 node_id = futures[future]
                 result = future.result()
                 self._apply_result(node_id, result, log)
+                self._notify_node(on_node_finished, node_id, log)
+
+    @staticmethod
+    def _notify_node(callback, node_id: str, log: ExecutionLog) -> None:
+        if callback is not None:
+            callback(node_id, log.records[node_id])
 
     def _execute_node(self, node_id: str, kwargs: dict) -> TaskResult:
         node = self._nodes[node_id]

@@ -67,6 +67,7 @@ class RunSnapshot:
         workflow_fingerprint: str,
         mode: str = "full",
         resumes_from: str | None = None,
+        status: str = "running",
     ) -> RunSnapshot:
         return cls(
             execution_id=execution_id,
@@ -74,6 +75,7 @@ class RunSnapshot:
             workflow_fingerprint=workflow_fingerprint,
             mode=mode,
             resumes_from=resumes_from,
+            status=status,
         )
 
     def set_node(self, record: TaskRecordSnapshot) -> None:
