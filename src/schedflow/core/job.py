@@ -44,6 +44,8 @@ class Job:
         coalesce: bool = True,
         max_instances: int = 1,
         priority: int = 0,
+        on_restart: str = "none",
+        workflow_timeout: float | None = None,
     ) -> None:
         if isinstance(workflow, dict):
             workflow = Workflow.from_dict(workflow)
@@ -66,6 +68,12 @@ class Job:
         self.coalesce = bool(coalesce)
         self.max_instances = max(1, int(max_instances))
         self.priority = max(0, int(priority))
+        if on_restart not in {"none", "resume", "rerun"}:
+            raise ValueError(
+                "on_restart must be one of 'none', 'resume', 'rerun'"
+            )
+        self.on_restart = on_restart
+        self.workflow_timeout = workflow_timeout
         self.status: str = "running"
         self.next_run_time: datetime | None = None
         if trigger is not None:
@@ -103,6 +111,8 @@ class Job:
             "coalesce": self.coalesce,
             "max_instances": self.max_instances,
             "priority": self.priority,
+            "on_restart": self.on_restart,
+            "workflow_timeout": self.workflow_timeout,
             "next_run_time": (
                 self.next_run_time.isoformat()
                 if self.next_run_time is not None
@@ -129,6 +139,8 @@ class Job:
             coalesce=data.get("coalesce", True),
             max_instances=data.get("max_instances", 1),
             priority=data.get("priority", 0),
+            on_restart=data.get("on_restart", "none"),
+            workflow_timeout=data.get("workflow_timeout"),
         )
         job.status = data.get("status", "running")
         next_run_time = data.get("next_run_time")

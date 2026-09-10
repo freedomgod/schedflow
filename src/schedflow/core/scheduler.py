@@ -405,6 +405,8 @@ class Scheduler:
         coalesce: bool = True,
         max_instances: int = 1,
         priority: int = 0,
+        on_restart: str = "none",
+        workflow_timeout: float | None = None,
         replace: bool = False,
     ) -> Job:
         if isinstance(workflow, dict):
@@ -432,6 +434,8 @@ class Scheduler:
             coalesce=coalesce,
             max_instances=max_instances,
             priority=priority,
+            on_restart=on_restart,
+            workflow_timeout=workflow_timeout,
         )
         store = self.get_jobstore(jobstore_alias)
         with self._lock:
@@ -478,6 +482,8 @@ class Scheduler:
         coalesce=None,
         max_instances=None,
         priority=None,
+        on_restart=None,
+        workflow_timeout=None,
     ) -> Job:
         with self._lock:
             job = self._find_job(job_id)
@@ -517,6 +523,14 @@ class Scheduler:
                 job.max_instances = max(1, int(max_instances))
             if priority is not None:
                 job.priority = max(0, int(priority))
+            if on_restart is not None:
+                if on_restart not in {"none", "resume", "rerun"}:
+                    raise ValueError(
+                        "on_restart must be one of 'none', 'resume', 'rerun'"
+                    )
+                job.on_restart = on_restart
+            if workflow_timeout is not None:
+                job.workflow_timeout = workflow_timeout
             if job.jobstore_alias != old_alias:
                 old_store = self._jobstores.get(old_alias, self._jobstore)
                 try:

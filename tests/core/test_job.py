@@ -106,3 +106,21 @@ def test_job_completed_status_roundtrip():
     job.status = "completed"
     restored = Job.from_dict(job.to_dict())
     assert restored.status == "completed"
+
+
+def test_job_run_policy_fields_roundtrip():
+    wf = Workflow("wf")
+    wf.add_task("a", func="os:getcwd")
+    job = Job(wf, None, job_id="p1", on_restart="resume", workflow_timeout=30)
+    restored = Job.from_dict(job.to_dict())
+    assert restored.on_restart == "resume"
+    assert restored.workflow_timeout == 30
+
+
+def test_job_rejects_unknown_on_restart():
+    import pytest
+
+    wf = Workflow("wf")
+    wf.add_task("a", func="os:getcwd")
+    with pytest.raises(ValueError):
+        Job(wf, None, job_id="bad", on_restart="sometimes")
