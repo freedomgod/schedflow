@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     # ── Logging ──────────────────────────────────────────
     LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "text"
 
     # ── Metadata DB ──────────────────────────────────────
     SCHEDFLOW_META_DB: str = "data/scheduler_meta.db"

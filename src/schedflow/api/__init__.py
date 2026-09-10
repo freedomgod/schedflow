@@ -34,6 +34,9 @@ def create_app(
     **options: Any,
 ) -> FastAPI:
     """Create and configure the FastAPI application around one core scheduler."""
+    from schedflow.utils.logging import configure_logging
+
+    configure_logging()
     app = FastAPI(**options)
     app.state.scheduler = scheduler
     app.state.scheduler_api = scheduler

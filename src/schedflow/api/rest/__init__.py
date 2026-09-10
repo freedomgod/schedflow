@@ -18,6 +18,9 @@ from schedflow.core.scheduler import STATE_STOPPED
 
 def create_app(scheduler, **options) -> FastAPI:
     """Create a FastAPI app bound to a core :class:`Scheduler`."""
+    from schedflow.utils.logging import configure_logging
+
+    configure_logging()
     app = FastAPI(**options)
     mount_routes(app, scheduler)
     return app
