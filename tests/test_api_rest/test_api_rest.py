@@ -240,3 +240,31 @@ def test_completed_status_visible_via_api():
 
     data = client.get("/api/jobs/done").json()["data"]
     assert data["status"] == "completed"
+
+
+def test_run_resume_returns_409_without_snapshot():
+    client = make_client()
+    client.post(
+        "/api/jobs",
+        json={"workflow": workflow_payload("r"), "job_id": "r1"},
+    )
+
+    resp = client.post("/api/jobs/r1/run", json={"mode": "resume"})
+
+    assert resp.status_code == 409, resp.text
+    assert "snapshot" in resp.text.lower()
+
+
+def test_runs_overview_lists_executions():
+    client = make_client()
+    scheduler = client.app.state.scheduler_api
+    client.post(
+        "/api/jobs",
+        json={"workflow": workflow_payload("runs"), "job_id": "runs-job"},
+    )
+    scheduler.run_job_now("runs-job")
+
+    runs = client.get("/api/jobs/runs-job/runs").json()["data"]
+
+    assert runs and runs[0]["execution_id"]
+    assert runs[0]["mode"] in {"full", "resume"}

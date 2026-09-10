@@ -11,6 +11,10 @@ class DagChangedError(ValueError):
     """Raised when a snapshot was produced by a different workflow."""
 
 
+class SnapshotNotFoundError(ValueError):
+    """Raised when resume is requested without a resumable snapshot."""
+
+
 def _iso(value: datetime) -> str:
     return value.isoformat()
 

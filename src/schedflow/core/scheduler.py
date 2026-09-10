@@ -26,6 +26,7 @@ from schedflow.core.run import RunRequest
 from schedflow.core.snapshot import (
     DagChangedError,
     RunSnapshot,
+    SnapshotNotFoundError,
     TaskRecordSnapshot,
 )
 from schedflow.core.workflow import Workflow
@@ -661,7 +662,9 @@ class Scheduler:
             else:
                 source = self._latest_resumable_snapshot(job)
             if source is None:
-                raise ValueError("no resumable snapshot for this job")
+                raise SnapshotNotFoundError(
+                    "no resumable snapshot for this job"
+                )
             if source.workflow_fingerprint != job.workflow.fingerprint():
                 raise DagChangedError(
                     "Workflow definition changed since the snapshot was taken"
@@ -812,6 +815,43 @@ class Scheduler:
                 if log is not None:
                     return log
             return None
+
+    def list_job_runs(self, job_id: str) -> list[dict]:
+        job = self.get_job(job_id)
+        if job is None:
+            raise JobNotFoundError(job_id)
+        store = self._job_store(job)
+        runs = []
+        for snapshot in store.list_snapshots(job_id):
+            log = store.get_log(job_id, snapshot.execution_id)
+            runs.append(
+                {
+                    "execution_id": snapshot.execution_id,
+                    "mode": snapshot.mode,
+                    "resumes_from": snapshot.resumes_from,
+                    "status": snapshot.status,
+                    "started_at": snapshot.started_at.isoformat(),
+                    "ended_at": (
+                        log.end_time.isoformat()
+                        if log is not None and log.end_time is not None
+                        else None
+                    ),
+                }
+            )
+        return runs
+
+    def get_job_run(self, job_id: str, execution_id: str) -> dict | None:
+        job = self.get_job(job_id)
+        if job is None:
+            raise JobNotFoundError(job_id)
+        store = self._job_store(job)
+        snapshot = store.get_snapshot(job_id, execution_id)
+        log = store.get_log(job_id, execution_id)
+        if snapshot is not None and snapshot.status == "running":
+            return snapshot.to_dict()
+        if log is not None:
+            return log.to_dict()
+        return snapshot.to_dict() if snapshot is not None else None
 
     # ── lifecycle ───────────────────────────────────────────────────────
 

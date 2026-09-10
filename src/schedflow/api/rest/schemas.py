@@ -128,3 +128,8 @@ class JobUpdateRequest(BaseModel):
 
 class RescheduleRequest(BaseModel):
     trigger: TriggerIn
+
+
+class RunJobRequest(BaseModel):
+    mode: Literal["full", "resume"] = "full"
+    timeout: float | None = Field(default=None, gt=0)

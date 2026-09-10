@@ -172,3 +172,24 @@ def test_job_status_and_priority_values_match_frontend_contract():
 
         updated = client.get("/api/jobs/status-job").json()["data"]
         assert updated["status"] == "completed"
+
+
+def test_run_and_log_fields_match_frontend_contract():
+    with _client() as client:
+        client.post(
+            "/api/jobs",
+            json={
+                "workflow": _workflow_payload(),
+                "job_id": "runs-job",
+            },
+        )
+        scheduler = client.app.state.scheduler
+        log = scheduler.run_job_now("runs-job")
+
+        assert log.mode in {"full", "resume"}
+        assert log.resumes_from is None
+
+        runs = client.get("/api/jobs/runs-job/runs").json()["data"]
+        assert runs[0]["execution_id"] == log.log_id
+        assert runs[0]["mode"] == log.mode
+        assert "resumes_from" in runs[0]

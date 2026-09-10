@@ -6,6 +6,7 @@ from schedflow.api.rest.schemas import (
     JobCreateRequest,
     JobUpdateRequest,
     RescheduleRequest,
+    RunJobRequest,
 )
 from schedflow.api.schemas import APIResponse
 from schedflow.core.jobstore import JobConflictError, JobNotFoundError
@@ -14,6 +15,7 @@ from schedflow.core.scheduler import (
     STATE_RUNNING,
     STATE_STOPPED,
 )
+from schedflow.core.snapshot import DagChangedError, SnapshotNotFoundError
 from schedflow.core.workflow import CycleError
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -141,11 +143,22 @@ def cancel_job(job_id: str, scheduler=Depends(_get_scheduler)):
 
 
 @router.post("/jobs/{job_id}/run")
-def run_job_now(job_id: str, scheduler=Depends(_get_scheduler)):
+def run_job_now(
+    job_id: str,
+    request: RunJobRequest | None = None,
+    scheduler=Depends(_get_scheduler),
+):
+    body = request or RunJobRequest()
     try:
-        log = scheduler.run_job_now(job_id)
+        log = scheduler.run_job_now(
+            job_id, mode=body.mode, timeout=body.timeout
+        )
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except (DagChangedError, SnapshotNotFoundError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     return APIResponse(data=log.to_dict())
 
 
@@ -180,6 +193,23 @@ def get_job_log(job_id: str, log_id: str, scheduler=Depends(_get_scheduler)):
     if log is None:
         raise JobNotFoundError(log_id)
     return APIResponse(data=log.to_dict())
+
+
+@router.get("/jobs/{job_id}/runs")
+def list_job_runs(job_id: str, scheduler=Depends(_get_scheduler)):
+    if scheduler.get_job(job_id) is None:
+        raise JobNotFoundError(job_id)
+    return APIResponse(data=scheduler.list_job_runs(job_id))
+
+
+@router.get("/jobs/{job_id}/runs/{execution_id}")
+def get_job_run(
+    job_id: str, execution_id: str, scheduler=Depends(_get_scheduler)
+):
+    data = scheduler.get_job_run(job_id, execution_id)
+    if data is None:
+        raise JobNotFoundError(execution_id)
+    return APIResponse(data=data)
 
 
 @router.get("/scheduler/status")
