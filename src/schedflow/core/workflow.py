@@ -248,6 +248,20 @@ class Workflow:
                 ],
             }
 
+    def fingerprint(self) -> str:
+        """Stable hash of the DAG definition used to validate resume snapshots."""
+        import hashlib
+        import json
+
+        try:
+            payload = self.to_dict()
+        except (TypeError, ValueError):
+            payload = self._snapshot()
+        encoded = json.dumps(
+            payload, sort_keys=True, ensure_ascii=False, default=str
+        )
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:32]
+
     def _execute_generation(
         self,
         generation: list[str],
