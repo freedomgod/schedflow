@@ -21,6 +21,11 @@ from schedflow.core.jobstore import (
     JobNotFoundError,
     MemoryJobStore,
 )
+from schedflow.core.metrics import (
+    counter_inc,
+    gauge_set,
+    histogram_observe,
+)
 from schedflow.core.plugins import EXECUTOR_PLUGINS, JOBSTORE_PLUGINS
 from schedflow.core.run import RunRequest
 from schedflow.core.snapshot import (
@@ -453,7 +458,20 @@ class Scheduler:
             else:
                 store.add(job)
         self._events.publish(SchedulerEvent("job.added", job_id=job.job_id))
+        self._refresh_job_metrics()
         return job
+
+    def _refresh_job_metrics(self) -> None:
+        counts = {"running": 0, "paused": 0, "completed": 0}
+        for job in self.get_jobs():
+            if job.status in counts:
+                counts[job.status] += 1
+        for status, count in counts.items():
+            gauge_set(
+                "schedflow_jobs_total",
+                count,
+                labels={"status": status},
+            )
 
     def get_job(self, job_id: str) -> Job | None:
         with self._lock:
@@ -551,6 +569,7 @@ class Scheduler:
                 store = self._jobstores.get(job.jobstore_alias, self._jobstore)
                 store.update(job)
         self._events.publish(SchedulerEvent("job.updated", job_id=job_id))
+        self._refresh_job_metrics()
         return job
 
     def remove_job(self, job_id: str) -> None:
@@ -561,6 +580,7 @@ class Scheduler:
             store = self._jobstores.get(job.jobstore_alias, self._jobstore)
             store.remove(job_id)
         self._events.publish(SchedulerEvent("job.removed", job_id=job_id))
+        self._refresh_job_metrics()
 
     def pause_job(self, job_id: str) -> Job:
         with self._lock:
@@ -572,6 +592,7 @@ class Scheduler:
             store = self._jobstores.get(job.jobstore_alias, self._jobstore)
             store.update(job)
         self._events.publish(SchedulerEvent("job.paused", job_id=job_id))
+        self._refresh_job_metrics()
         return job
 
     def resume_job(self, job_id: str) -> Job:
@@ -599,6 +620,7 @@ class Scheduler:
             store = self._jobstores.get(job.jobstore_alias, self._jobstore)
             store.update(job)
         self._events.publish(SchedulerEvent("job.resumed", job_id=job_id))
+        self._refresh_job_metrics()
         return job
 
     def reschedule_job(self, job_id: str, trigger: Trigger) -> Job:
@@ -798,8 +820,20 @@ class Scheduler:
         self._events.publish(
             SchedulerEvent(kind, job_id=job_id, log=log)
         )
+        self._record_run_metrics(kind, log)
         self._finalize_active_snapshot(job, log)
         return log
+
+    @staticmethod
+    def _record_run_metrics(kind: str, log: ExecutionLog) -> None:
+        counter_inc(
+            "schedflow_job_runs_total",
+            labels={"outcome": kind.split(".")[-1]},
+        )
+        if log.duration is not None:
+            histogram_observe(
+                "schedflow_job_run_duration_seconds", log.duration
+            )
 
     def get_job_logs(self, job_id: str) -> list[ExecutionLog]:
         with self._lock:
@@ -861,6 +895,10 @@ class Scheduler:
         for executor in self._executors.values():
             executor.start(self)
         self.state = STATE_PAUSED if paused else STATE_RUNNING
+        gauge_set(
+            "schedflow_scheduler_state",
+            2 if paused else 1,
+        )
         self._stop_event.clear()
         self._wakeup_event.clear()
         self._thread = threading.Thread(
@@ -882,12 +920,14 @@ class Scheduler:
         if self.state == STATE_STOPPED:
             raise ValueError("Scheduler is not running")
         self.state = STATE_PAUSED
+        gauge_set("schedflow_scheduler_state", 2)
         self._events.publish(SchedulerEvent("scheduler.paused"))
 
     def resume(self) -> None:
         if self.state == STATE_STOPPED:
             raise ValueError("Scheduler is not running")
         self.state = STATE_RUNNING
+        gauge_set("schedflow_scheduler_state", 1)
         self._wakeup_event.set()
         self._events.publish(SchedulerEvent("scheduler.resumed"))
 
@@ -904,6 +944,7 @@ class Scheduler:
         for executor in self._executors.values():
             executor.shutdown(wait=wait)
         self.state = STATE_STOPPED
+        gauge_set("schedflow_scheduler_state", 0)
         self._events.publish(SchedulerEvent("scheduler.shutdown"))
 
     def _recover_interrupted_runs(self) -> None:
@@ -996,6 +1037,7 @@ class Scheduler:
             try:
                 self._process_due()
             except Exception as exc:
+                counter_inc("schedflow_main_loop_errors_total")
                 LOGGER.exception("scheduler loop error")
                 self._publish_error(exc, key="main-loop")
 
@@ -1048,12 +1090,20 @@ class Scheduler:
                 )
                 return
             self._running[job.job_id] = count + 1
+            gauge_set(
+                "schedflow_dispatch_queue_depth",
+                self._dispatch_queue.size(),
+            )
 
     def _dispatch_loop(self) -> None:
         while not self._stop_event.is_set():
             item = self._dispatch_queue.get(timeout=0.5)
             if item is None:
                 continue
+            gauge_set(
+                "schedflow_dispatch_queue_depth",
+                self._dispatch_queue.size(),
+            )
             job, run_time, request = item
             with self._dispatch_lock:
                 cancel_event = self._cancel_events.get(job.job_id)
@@ -1126,6 +1176,7 @@ class Scheduler:
                 self._events.publish(
                     SchedulerEvent("job.completed", job_id=job.job_id)
                 )
+                self._refresh_job_metrics()
                 return
             job.next_run_time = next_run
         try:
@@ -1161,6 +1212,8 @@ class Scheduler:
             self._events.publish(
                 SchedulerEvent(kind, job_id=job.job_id, run_time=run_time, log=log)
             )
+            self._record_run_metrics(kind, log)
+            self._refresh_job_metrics()
             self._finalize_active_snapshot(job, log)
         elif error is not None:
             from schedflow.core.log import ExecutionLog, TaskRecord

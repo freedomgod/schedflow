@@ -8,6 +8,8 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from schedflow.core.metrics import counter_inc
+
 if TYPE_CHECKING:
     from schedflow.core.log import ExecutionLog, TaskRecord
 
@@ -102,6 +104,7 @@ class EventBus:
             try:
                 callback(event)
             except Exception:
+                counter_inc("schedflow_event_listener_errors_total")
                 listener = (
                     getattr(callback, "__qualname__", None)
                     or getattr(callback, "__name__", None)
