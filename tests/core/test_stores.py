@@ -229,3 +229,30 @@ class TestMongoDBJobStore:
             assert any("next_run_utc" in key[0] for key in indexes.values())
         finally:
             store.close()
+
+    def test_snapshot_roundtrip(self):
+        from schedflow.core.snapshot import RunSnapshot
+
+        store = MongoDBJobStore(
+            host="localhost", port=27017, database="schedflow_test"
+        )
+        try:
+            snapshot = RunSnapshot.start(
+                job_id="mongo-snap",
+                execution_id="run-1",
+                workflow_fingerprint="f",
+            )
+            store.save_snapshot("mongo-snap", snapshot)
+
+            assert (
+                store.get_snapshot("mongo-snap", "run-1").workflow_fingerprint
+                == "f"
+            )
+            assert [
+                item.execution_id
+                for item in store.list_snapshots("mongo-snap")
+            ] == ["run-1"]
+            store.delete_snapshot("mongo-snap", "run-1")
+            assert store.get_snapshot("mongo-snap", "run-1") is None
+        finally:
+            store.close()

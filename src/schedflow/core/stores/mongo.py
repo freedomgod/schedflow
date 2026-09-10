@@ -12,6 +12,7 @@ from schedflow.core.jobstore import (
     JobStore,
 )
 from schedflow.core.log import ExecutionLog
+from schedflow.core.snapshot import RunSnapshot
 
 try:
     from pymongo import MongoClient
@@ -43,12 +44,18 @@ class MongoDBJobStore(JobStore):
         )
         self._collection = self._client[database][collection]
         self._logs_collection = self._client[database][f"{collection}_logs"]
+        self._snapshots_collection = self._client[database][
+            f"{collection}_snapshots"
+        ]
         self._indexes_ensured = False
 
     def _ensure_indexes(self) -> None:
         if self._indexes_ensured:
             return
         self._collection.create_index("next_run_utc", background=True)
+        self._snapshots_collection.create_index(
+            [("job_id", 1), ("started_at", -1)], background=True
+        )
         self._indexes_ensured = True
 
     @staticmethod
@@ -158,6 +165,54 @@ class MongoDBJobStore(JobStore):
             if log.log_id == log_id:
                 return log
         return None
+
+    @staticmethod
+    def _snapshot_id(job_id: str, execution_id: str) -> str:
+        return f"{job_id}:{execution_id}"
+
+    def save_snapshot(self, job_id: str, snapshot: RunSnapshot) -> None:
+        self._ensure_indexes()
+        self._snapshots_collection.update_one(
+            {"_id": self._snapshot_id(job_id, snapshot.execution_id)},
+            {
+                "$set": {
+                    "job_id": job_id,
+                    "execution_id": snapshot.execution_id,
+                    "started_at": snapshot.started_at.isoformat(),
+                    "snapshot_json": json.dumps(
+                        snapshot.to_dict(), ensure_ascii=False
+                    ),
+                }
+            },
+            upsert=True,
+        )
+
+    def get_snapshot(
+        self, job_id: str, execution_id: str
+    ) -> RunSnapshot | None:
+        self._ensure_indexes()
+        document = self._snapshots_collection.find_one(
+            {"_id": self._snapshot_id(job_id, execution_id)}
+        )
+        if document is None:
+            return None
+        return RunSnapshot.from_dict(json.loads(document["snapshot_json"]))
+
+    def list_snapshots(self, job_id: str) -> list[RunSnapshot]:
+        self._ensure_indexes()
+        documents = self._snapshots_collection.find(
+            {"job_id": job_id}
+        ).sort([("started_at", -1), ("_id", -1)])
+        return [
+            RunSnapshot.from_dict(json.loads(document["snapshot_json"]))
+            for document in documents
+        ]
+
+    def delete_snapshot(self, job_id: str, execution_id: str) -> None:
+        self._ensure_indexes()
+        self._snapshots_collection.delete_one(
+            {"_id": self._snapshot_id(job_id, execution_id)}
+        )
 
     def close(self) -> None:
         self._client.close()
