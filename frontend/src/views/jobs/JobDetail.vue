@@ -32,6 +32,8 @@
             <div class="info-row"><dt>存储后端</dt><dd><span class="config-link" @click="showJobstoreConfig(job.jobstore)">{{ job.jobstore }}</span></dd></div>
             <div class="info-row"><dt>触发器</dt><dd><span class="config-link" @click="showTriggerConfig">{{ job.trigger || '-' }}</span></dd></div>
             <div class="info-row"><dt>优先级</dt><dd>{{ job.priority ?? 0 }}</dd></div>
+            <div class="info-row"><dt>重启策略</dt><dd>{{ job.on_restart ?? 'none' }}</dd></div>
+            <div class="info-row"><dt>总超时</dt><dd>{{ job.workflow_timeout ? job.workflow_timeout + 's' : '-' }}</dd></div>
           </dl>
         </div>
 
@@ -43,6 +45,13 @@
             <div class="info-row"><dt>容错时间</dt><dd>{{ job.misfire_grace_time ?? '-' }}s</dd></div>
             <div class="info-row"><dt>合并执行</dt><dd>{{ job.coalesce ? '是' : '否' }}</dd></div>
             <div class="info-row"><dt>最大实例数</dt><dd>{{ job.max_instances ?? '-' }}</dd></div>
+            <div class="info-row">
+              <dt>执行</dt>
+              <dd class="detail-run-actions">
+                <button class="action-btn" :disabled="runningAction" @click="handleRun('full')">全量执行</button>
+                <button class="action-btn" :disabled="runningAction" @click="handleRun('resume')">恢复执行</button>
+              </dd>
+            </div>
           </dl>
         </div>
 
@@ -153,7 +162,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getJob, updateJob, connectNextRunTimeSSE } from '@/api/jobs'
+import { getJob, updateJob, runJob, connectNextRunTimeSSE } from '@/api/jobs'
 import { normalizeTriggerType } from '@/api/mappers'
 import type { Job } from '@/types'
 import type { DagData, TaskNodeProperties } from '@/types/workflow'
@@ -171,6 +180,7 @@ const loading = ref(false)
 const savingConfig = ref(false)
 const isConfigEditing = ref(false)
 const sseNextRunTime = ref<string | null>(null)
+const runningAction = ref(false)
 const sseHasUpdate = ref(false)
 const viewWorkflowEditorRef = ref<InstanceType<typeof WorkflowEditor> | null>(null)
 const editWorkflowEditorRef = ref<InstanceType<typeof WorkflowEditor> | null>(null)
@@ -278,6 +288,23 @@ function startSSE() {
 function stopSSE() { sseCleanup?.(); sseCleanup = null }
 
 async function showExecutorConfig(name: string) { executorDialogTitle.value = `执行器配置 — ${name}`; executorDialogVisible.value = true; try { const c = await getExecutorConfigs(); const f = c.find((x: ComponentConfig) => x.name === name); executorFields.value = f ? Object.entries(f.config || {}).map(([k, v]) => ({ label: k, value: v })) : [] } catch { executorFields.value = [] } }
+
+async function handleRun(mode: 'full' | 'resume') {
+  if (!job.value) return
+  runningAction.value = true
+  try {
+    await runJob(job.value.id, { mode })
+    ElMessage.success(mode === 'resume' ? '已发起恢复执行' : '已发起全量执行')
+  } catch {
+    ElMessage.error(
+      mode === 'resume'
+        ? '恢复失败：无可用快照或 DAG 已变更'
+        : '执行失败',
+    )
+  } finally {
+    runningAction.value = false
+  }
+}
 async function showJobstoreConfig(alias: string) { jobstoreDialogTitle.value = `存储后端配置 — ${alias}`; jobstoreDialogVisible.value = true; try { const d: JobstoreDetailConfig = await getJobstoreConfig(alias); jobstoreFields.value = Object.entries(d.config || {}).map(([k, v]) => ({ label: k, value: v })) } catch { jobstoreFields.value = [] } }
 function showTriggerConfig() { if (!job.value) return; triggerDialogTitle.value = `触发器配置 — ${job.value.trigger || '-'}`; triggerDialogVisible.value = true; const a = job.value.trigger_args; triggerFields.value = a && Object.keys(a).length > 0 ? Object.entries(a).map(([k, v]) => ({ label: k, value: v })) : [] }
 function renderMarkdown(text: string | undefined | null): string { if (!text) return ''; return marked(text) as string }

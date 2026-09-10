@@ -13,6 +13,10 @@
         {{ log.start_time ? new Date(log.start_time).toLocaleString() : '-' }}
       </div>
       <div class="execution-id">{{ log.flow_log_id }}</div>
+      <div v-if="log.mode" class="execution-mode">
+        {{ log.mode === 'resume' ? '恢复执行' : '全量执行' }}
+        <span v-if="log.resumes_from"> ← {{ log.resumes_from }}</span>
+      </div>
       <div class="execution-summary">
         <span class="summary-item success">{{ succeededCount(log) }} 成功</span>
         <span class="summary-item failed">{{ failedCount(log) }} 失败</span>

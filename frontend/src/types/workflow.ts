@@ -75,7 +75,8 @@ export interface NodeExecutionRecord {
   node_id: string
   task_id?: string
   node_name?: string
-  status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'SKIPPED' | null
+  status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'SKIPPED' | 'CANCELLED' | null
+  resumed?: boolean
   start_time?: string | null
   end_time?: string | null
   duration?: number | null
@@ -91,6 +92,8 @@ export interface NodeExecutionRecord {
 export interface ExecutionLog {
   flow_log_id: string
   flow_id?: string | null
+  mode?: 'full' | 'resume'
+  resumes_from?: string | null
   start_time?: string | null
   end_time?: string | null
   duration?: number | null

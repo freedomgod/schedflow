@@ -98,6 +98,8 @@ export function jobFromApi(job: any): Job {
     coalesce: job.coalesce,
     max_instances: job.max_instances,
     priority: job.priority ?? 0,
+    on_restart: job.on_restart ?? 'none',
+    workflow_timeout: job.workflow_timeout ?? undefined,
     next_run_time: job.next_run_time,
     func_ref: typeof firstTask?.ref === 'string' ? firstTask.ref : undefined,
     dag,
@@ -145,6 +147,8 @@ export function jobCreatePayload(params: JobCreateParams): any {
     coalesce: params.coalesce,
     max_instances: params.max_instances,
     priority: params.priority,
+    on_restart: params.on_restart,
+    workflow_timeout: params.workflow_timeout,
     replace: params.replace_existing,
   }
 }
@@ -160,6 +164,8 @@ export function jobUpdatePayload(params: JobUpdateParams): any {
     coalesce: params.coalesce,
     max_instances: params.max_instances,
     priority: params.priority,
+    on_restart: params.on_restart,
+    workflow_timeout: params.workflow_timeout,
   }
   if (params.dag) {
     result.workflow = dagToWorkflow(params.dag)
@@ -188,6 +194,8 @@ export function logFromApi(log: any): ExecutionLog {
   return {
     flow_log_id: log.log_id,
     flow_id: log.flow_id,
+    mode: log.mode ?? 'full',
+    resumes_from: log.resumes_from ?? null,
     start_time: log.start_time,
     end_time: log.end_time,
     duration: log.duration,

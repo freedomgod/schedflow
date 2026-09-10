@@ -42,6 +42,13 @@ export function cancelJob(id: string): Promise<Job> {
   )
 }
 
+export function runJob(
+  id: string,
+  params: { mode?: 'full' | 'resume'; timeout?: number } = {},
+): Promise<unknown> {
+  return schedulerClient.post(`/jobs/${id}/run`, params)
+}
+
 /**
  * EventSource cannot set Authorization headers, so the JWT is appended as a
  * query parameter for SSE endpoints (the backend accepts both forms).

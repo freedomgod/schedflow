@@ -8,6 +8,8 @@ export interface Job {
   executor: string
   jobstore: string
   priority?: number
+  on_restart?: 'none' | 'resume' | 'rerun'
+  workflow_timeout?: number
   misfire_grace_time?: number
   coalesce?: boolean
   max_instances?: number
@@ -39,6 +41,8 @@ export interface JobCreateParams {
   coalesce?: boolean
   max_instances?: number
   priority?: number
+  on_restart?: 'none' | 'resume' | 'rerun'
+  workflow_timeout?: number
   next_run_time?: string
   replace_existing?: boolean
 }
@@ -51,10 +55,21 @@ export interface JobUpdateParams {
   coalesce?: boolean
   max_instances?: number
   priority?: number
+  on_restart?: 'none' | 'resume' | 'rerun'
+  workflow_timeout?: number
   next_run_time?: string
   executor?: string
   jobstore?: string
   dag?: DagData
   trigger?: string
   trigger_args?: Record<string, unknown>
+}
+
+export interface RunSummary {
+  execution_id: string
+  mode: 'full' | 'resume'
+  resumes_from?: string | null
+  status: string
+  started_at?: string | null
+  ended_at?: string | null
 }

@@ -42,6 +42,14 @@
               <div class="form-group"><label>最大实例数</label><input v-model.number="form.max_instances" type="number" min="1" class="form-input" /></div>
               <div class="form-group"><label>错过宽限(s)</label><input v-model.number="form.misfire_grace_time" type="number" min="0" class="form-input" /></div>
               <div class="form-group"><label>优先级</label><input v-model.number="form.priority" type="number" min="0" class="form-input" /></div>
+              <div class="form-group"><label>重启策略</label>
+                <select v-model="form.on_restart" class="form-input">
+                  <option value="none">不处理</option>
+                  <option value="resume">断点续跑</option>
+                  <option value="rerun">全量重跑</option>
+                </select>
+              </div>
+              <div class="form-group"><label>总超时(s)</label><input v-model.number="form.workflow_timeout" type="number" min="0" class="form-input" /></div>
             </div>
             <p class="form-hint">提示：具体任务节点请在「工作流 DAG」标签页中添加和配置，每个节点可设置为不同的任务类型（Python Callable / Python 文件 / Python 脚本 / Bash 命令）。</p>
           </div>
@@ -100,12 +108,13 @@ const isEdit = ref(false)
 const form = reactive({
   name: '', description: '', executor: '', jobstore: '',
   coalesce: false, max_instances: 1, misfire_grace_time: 0, priority: 0,
+  on_restart: 'none' as 'none' | 'resume' | 'rerun', workflow_timeout: undefined as number | undefined,
 })
 
 const tabs = [{ key: 'basic', label: '基本信息' }, { key: 'trigger', label: '触发器配置' }, { key: 'workflow', label: '工作流 DAG' }]
 
 function resetForm() {
-  Object.assign(form, { name: '', description: '', executor: '', jobstore: '', coalesce: false, max_instances: 1, misfire_grace_time: 0, priority: 0 })
+  Object.assign(form, { name: '', description: '', executor: '', jobstore: '', coalesce: false, max_instances: 1, misfire_grace_time: 0, priority: 0, on_restart: 'none', workflow_timeout: undefined })
   triggerType.value = 'cron'; triggerArgs.value = {}
   activeTab.value = 'basic'; formError.value = ''; isEdit.value = false
 }
@@ -113,7 +122,7 @@ function resetForm() {
 function fillFromJob(job: Job) {
   // Copying always creates a brand-new workflow, so stay in create mode.
   isEdit.value = false
-  Object.assign(form, { name: job.name || '', description: job.description || '', executor: job.executor, jobstore: job.jobstore, coalesce: job.coalesce ?? false, max_instances: job.max_instances ?? 1, misfire_grace_time: job.misfire_grace_time ?? 0, priority: job.priority ?? 0 })
+  Object.assign(form, { name: job.name || '', description: job.description || '', executor: job.executor, jobstore: job.jobstore, coalesce: job.coalesce ?? false, max_instances: job.max_instances ?? 1, misfire_grace_time: job.misfire_grace_time ?? 0, priority: job.priority ?? 0, on_restart: job.on_restart ?? 'none', workflow_timeout: job.workflow_timeout })
   triggerType.value = normalizeTriggerType(job.trigger)
   triggerArgs.value = { ...(job.trigger_args || {}) }
   activeTab.value = 'basic'
@@ -167,7 +176,8 @@ async function handleSubmit() {
 
   const params: JobCreateParams = {
     name: form.name, description: form.description || undefined, executor: form.executor, jobstore: form.jobstore,
-    coalesce: form.coalesce, max_instances: form.max_instances, misfire_grace_time: form.misfire_grace_time || undefined, priority: form.priority,
+    coalesce: form.coalesce, max_instances: form.max_instances, misfire_grace_time: form.misfire_grace_time || undefined,
+    priority: form.priority, on_restart: form.on_restart, workflow_timeout: form.workflow_timeout || undefined,
     trigger: triggerType.value, trigger_args: finalTriggerArgs && Object.keys(finalTriggerArgs).length > 0 ? finalTriggerArgs : undefined,
     dag: dagData || undefined,
   }
