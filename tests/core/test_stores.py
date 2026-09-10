@@ -209,7 +209,7 @@ class TestMongoDBJobStore:
         finally:
             store.close()
 
-    def test_snapshot_roundtrip(self):
+    def test_snapshot_roundtrip_redis(self):
         from schedflow.core.snapshot import RunSnapshot
 
         store = RedisJobStore(host="localhost", port=6379, db=15)
@@ -255,7 +255,7 @@ class TestMongoDBJobStore:
         finally:
             store.close()
 
-    def test_snapshot_roundtrip(self):
+    def test_snapshot_roundtrip_mongodb(self):
         from schedflow.core.snapshot import RunSnapshot
 
         store = MongoDBJobStore(

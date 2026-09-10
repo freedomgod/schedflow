@@ -62,7 +62,7 @@ def test_dispatch_queue_carries_run_request():
     request = RunRequest(mode="resume", timeout=10, resume_execution_id="run-0")
     queue.put(make_job("j1"), datetime.now(UTC), request)
 
-    job, run_time, carried = queue.get(timeout=0.1)
+    job, _run_time, carried = queue.get(timeout=0.1)
     assert job.job_id == "j1"
     assert carried == request
     assert carried.mode == "resume"
