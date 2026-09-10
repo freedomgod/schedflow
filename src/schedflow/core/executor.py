@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from schedflow.core.log import ExecutionLog
 from schedflow.core.process_worker import run_job_in_process
+from schedflow.core.run import RunRequest
 
 if TYPE_CHECKING:
     from schedflow.core.job import Job
@@ -32,15 +33,31 @@ class Executor(ABC):
         pass
 
     @abstractmethod
-    def submit(self, job: Job, run_time: datetime) -> None: ...
+    def submit(
+        self,
+        job: Job,
+        run_time: datetime,
+        request: RunRequest | None = None,
+        on_node_finished=None,
+    ) -> None: ...
 
 
 class DebugExecutor(Executor):
     """Runs jobs synchronously in the calling thread (for tests/development)."""
 
-    def submit(self, job: Job, run_time: datetime) -> None:
+    def submit(
+        self,
+        job: Job,
+        run_time: datetime,
+        request: RunRequest | None = None,
+        on_node_finished=None,
+    ) -> None:
         try:
-            log = job.run(cancel_event=self._cancel_event(job))
+            log = job.run(
+                cancel_event=self._cancel_event(job),
+                request=request,
+                on_node_finished=on_node_finished,
+            )
         except Exception as exc:  # noqa: BLE001
             self._scheduler._on_job_finished(job, run_time, None, error=exc)
         else:
@@ -55,10 +72,18 @@ class ThreadPoolExecutor(Executor):
             max_workers=max(1, int(max_workers))
         )
 
-    def submit(self, job: Job, run_time: datetime) -> None:
+    def submit(
+        self,
+        job: Job,
+        run_time: datetime,
+        request: RunRequest | None = None,
+        on_node_finished=None,
+    ) -> None:
         future = self._pool.submit(
             job.run,
             cancel_event=self._cancel_event(job),
+            request=request,
+            on_node_finished=on_node_finished,
         )
         future.add_done_callback(
             lambda completed: self._handle(job, run_time, completed)
@@ -91,17 +116,25 @@ class ProcessPoolExecutor(Executor):
             mp_context=context,
         )
 
-    def submit(self, job: Job, run_time: datetime) -> None:
+    def submit(
+        self,
+        job: Job,
+        run_time: datetime,
+        request: RunRequest | None = None,
+        on_node_finished=None,
+    ) -> None:
         project_root = (
             str(job.workflow.project_root)
             if job.workflow.project_root is not None
             else None
         )
+        request_payload = request.to_dict() if request is not None else None
         future = self._pool.submit(
             run_job_in_process,
             job.to_dict(),
             run_time.isoformat(),
             project_root,
+            request_payload,
         )
         future.add_done_callback(
             lambda completed: self._handle(job, run_time, completed)

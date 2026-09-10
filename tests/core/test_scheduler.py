@@ -53,7 +53,7 @@ class RecordingExecutor:
     def start(self, scheduler) -> None:
         pass
 
-    def submit(self, job, run_time) -> None:
+    def submit(self, job, run_time, request=None, on_node_finished=None) -> None:
         self.submitted.append(run_time)
 
     def shutdown(self, *, wait: bool = True) -> None:

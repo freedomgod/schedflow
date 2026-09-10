@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from schedflow.core.job import Job
+    from schedflow.core.run import RunRequest
 
 
 class AsyncIOExecutor(Executor):
@@ -47,9 +48,15 @@ class AsyncIOExecutor(Executor):
         self._loop = None
         self._thread = None
 
-    def submit(self, job: Job, run_time: datetime) -> None:
+    def submit(
+        self,
+        job: Job,
+        run_time: datetime,
+        request: RunRequest | None = None,
+        on_node_finished=None,
+    ) -> None:
         async def _run():
-            return job.run()
+            return job.run(request=request, on_node_finished=on_node_finished)
 
         future = asyncio.run_coroutine_threadsafe(_run(), self._loop)
         future.add_done_callback(
@@ -107,14 +114,22 @@ class GeventExecutor(Executor):
         self._hub = None
         self._thread = None
 
-    def submit(self, job: Job, run_time: datetime) -> None:
+    def submit(
+        self,
+        job: Job,
+        run_time: datetime,
+        request: RunRequest | None = None,
+        on_node_finished=None,
+    ) -> None:
         from gevent import Greenlet
 
         if self._hub is None:
             self._ready.wait(timeout=5)
         def _run() -> None:
             try:
-                log = job.run()
+                log = job.run(
+                    request=request, on_node_finished=on_node_finished
+                )
             except Exception as exc:  # noqa: BLE001
                 self._scheduler._on_job_finished(job, run_time, None, error=exc)
             else:
@@ -131,8 +146,16 @@ class TornadoExecutor(Executor):
     def __init__(self, max_workers: int = 10) -> None:
         self._pool = _ThreadPoolExecutor(max_workers=max(1, int(max_workers)))
 
-    def submit(self, job: Job, run_time: datetime) -> None:
-        future = self._pool.submit(job.run)
+    def submit(
+        self,
+        job: Job,
+        run_time: datetime,
+        request: RunRequest | None = None,
+        on_node_finished=None,
+    ) -> None:
+        future = self._pool.submit(
+            job.run, request=request, on_node_finished=on_node_finished
+        )
         future.add_done_callback(
             lambda completed: self._handle(job, run_time, completed)
         )
@@ -161,10 +184,18 @@ class TwistedExecutor(Executor):
 
         self._reactor = reactor
 
-    def submit(self, job: Job, run_time: datetime) -> None:
+    def submit(
+        self,
+        job: Job,
+        run_time: datetime,
+        request: RunRequest | None = None,
+        on_node_finished=None,
+    ) -> None:
         def _run() -> None:
             try:
-                log = job.run()
+                log = job.run(
+                    request=request, on_node_finished=on_node_finished
+                )
             except Exception as exc:  # noqa: BLE001
                 self._scheduler._on_job_finished(job, run_time, None, error=exc)
             else:

@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 
 from schedflow.core.log import ExecutionLog
+from schedflow.core.run import RunRequest
+from schedflow.core.snapshot import RunSnapshot
 from schedflow.core.workflow import Workflow
 from schedflow.triggers.base import Trigger
 
@@ -87,12 +89,24 @@ class Job:
         max_workers: int = 3,
         executor: str = "thread",
         cancel_event=None,
+        request: RunRequest | None = None,
+        on_node_finished=None,
     ) -> ExecutionLog:
         """Execute the workflow directly; the resulting log carries job_id."""
+        request = request or RunRequest()
+        resume_snapshot = None
+        if request.mode == "resume":
+            if request.resume_snapshot is None:
+                raise ValueError("resume request requires resume_snapshot")
+            resume_snapshot = RunSnapshot.from_dict(request.resume_snapshot)
         log = self.workflow.run(
             max_workers=max_workers,
             executor=executor,
             cancel_event=cancel_event,
+            mode=request.mode,
+            timeout=request.timeout,
+            resume_from_snapshot=resume_snapshot,
+            on_node_finished=on_node_finished,
         )
         log.job_id = self.job_id
         return log

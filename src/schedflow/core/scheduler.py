@@ -21,6 +21,7 @@ from schedflow.core.jobstore import (
     MemoryJobStore,
 )
 from schedflow.core.plugins import EXECUTOR_PLUGINS, JOBSTORE_PLUGINS
+from schedflow.core.run import RunRequest
 from schedflow.core.workflow import Workflow
 from schedflow.triggers.base import Trigger
 from schedflow.utils import astimezone
@@ -788,7 +789,11 @@ class Scheduler:
                     )
                 )
                 return
-            if not self._dispatch_queue.put(job, run_time):
+            if not self._dispatch_queue.put(
+                job,
+                run_time,
+                RunRequest(mode="full", timeout=job.workflow_timeout),
+            ):
                 self._publish_error(
                     RuntimeError(
                         f"dispatch queue full for job {job.job_id!r}"
@@ -803,7 +808,7 @@ class Scheduler:
             item = self._dispatch_queue.get(timeout=0.5)
             if item is None:
                 continue
-            job, run_time = item
+            job, run_time, request = item
             with self._dispatch_lock:
                 cancel_event = self._cancel_events.get(job.job_id)
                 if cancel_event is not None and cancel_event.is_set():
@@ -829,7 +834,7 @@ class Scheduler:
             executor = self._executors.get(
                 job.executor_alias, self._executor
             )
-            executor.submit(job, run_time)
+            executor.submit(job, run_time, request, on_node_finished=None)
 
     def _advance(self, job: Job, run_time: datetime, now: datetime) -> None:
         store = self._jobstores.get(job.jobstore_alias, self._jobstore)
