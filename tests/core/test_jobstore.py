@@ -59,6 +59,26 @@ def test_update_and_remove():
     assert store.get("j1") is None
 
 
+def test_get_due_ignores_paused_job_with_armed_time():
+    store = make_store()
+    job = make_job()
+    store.add(job)
+    job.status = "paused"
+    job.next_run_time = datetime.now(UTC) - timedelta(seconds=5)
+
+    assert store.get_due(datetime.now(UTC)) == []
+    assert store.get_next_run_time() is None
+
+
+def test_push_scheduled_skips_non_running_job():
+    store = make_store()
+    job = make_job()
+    job.status = "paused"
+    store.add(job)
+
+    assert store.get_next_run_time() is None
+
+
 def test_remove_missing_raises():
     store = make_store()
     with pytest.raises(JobNotFoundError):

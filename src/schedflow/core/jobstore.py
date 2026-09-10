@@ -89,7 +89,7 @@ class MemoryJobStore(JobStore):
         self._counter = itertools.count()
 
     def _push_scheduled(self, job: Job) -> None:
-        if job.next_run_time is None:
+        if job.next_run_time is None or job.status != "running":
             return
         version = self._versions[job.job_id]
         heapq.heappush(
@@ -109,6 +109,7 @@ class MemoryJobStore(JobStore):
             if (
                 job is not None
                 and job.next_run_time is not None
+                and job.status == "running"
                 and version == self._versions.get(job_id)
             ):
                 return
