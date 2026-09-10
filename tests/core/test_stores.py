@@ -161,6 +161,32 @@ class TestSQLAlchemyJobStore:
         sqlalchemy_store.delete_snapshot("j1", "run-1")
         assert sqlalchemy_store.get_snapshot("j1", "run-1") is None
 
+    def test_ensure_tolerates_existing_column_and_index(
+        self, sqlalchemy_store, monkeypatch
+    ):
+        sqlalchemy_store.add(make_job())
+        sqlalchemy_store._schema_ready = False
+
+        class StaleInspector:
+            def get_table_names(self):
+                return ["jobs", "job_run_snapshots"]
+
+            def get_columns(self, table):
+                return [{"name": "id"}, {"name": "job_json"}]
+
+            def get_indexes(self, table):
+                return []
+
+        import schedflow.core.stores.sqlalchemy as store_module
+
+        monkeypatch.setattr(
+            store_module.sa, "inspect", lambda engine: StaleInspector()
+        )
+
+        sqlalchemy_store._ensure()
+
+        assert sqlalchemy_store.get("j1").job_id == "j1"
+
 
 @pytest.mark.skipif(
     not __import__("shutil").which("redis-server"),

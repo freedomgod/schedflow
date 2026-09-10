@@ -10,6 +10,7 @@ dropped.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from datetime import UTC, datetime
 
@@ -51,6 +52,12 @@ class SQLAlchemyJobStore(JobStore):
                 "Install it with: pip install schedflow[sqlalchemy]"
             )
         self._engine = engine or sa.create_engine(url)
+        database = getattr(self._engine.url, "database", None)
+        # In-memory SQLite uses one database per thread, so schema state must
+        # not be cached for it.
+        self._cache_schema = database not in (None, ":memory:")
+        self._schema_ready = False
+        self._schema_lock = threading.RLock()
         self._metadata = sa.MetaData()
         self.jobs = sa.Table(
             "jobs",
@@ -84,33 +91,59 @@ class SQLAlchemyJobStore(JobStore):
         return job.next_run_time.astimezone(UTC).isoformat()
 
     def _ensure(self) -> None:
+        with self._schema_lock:
+            if self._cache_schema and self._schema_ready:
+                return
+            self._ensure_schema()
+            if self._cache_schema:
+                self._schema_ready = True
+
+    def _ensure_schema(self) -> None:
         inspector = sa.inspect(self._engine)
         if "jobs" not in set(inspector.get_table_names()):
-            self._metadata.create_all(self._engine, checkfirst=True)
+            try:
+                self._metadata.create_all(self._engine, checkfirst=True)
+            except OperationalError as exc:
+                if "already exists" not in str(exc).lower():
+                    raise
             return
         columns = {
             column["name"] for column in inspector.get_columns("jobs")
         }
         if "next_run_utc" not in columns:
-            with self._engine.begin() as connection:
-                connection.execute(
-                    sa.text(
-                        "ALTER TABLE jobs ADD COLUMN next_run_utc VARCHAR(64)"
+            try:
+                with self._engine.begin() as connection:
+                    connection.execute(
+                        sa.text(
+                            "ALTER TABLE jobs "
+                            "ADD COLUMN next_run_utc VARCHAR(64)"
+                        )
                     )
-                )
+            except OperationalError as exc:
+                # Another thread/process won the migration race.
+                if "duplicate column name" not in str(exc).lower():
+                    raise
         index_names = {
             index["name"] for index in inspector.get_indexes("jobs")
         }
         if "ix_jobs_next_run_utc" not in index_names:
-            with self._engine.begin() as connection:
-                connection.execute(
-                    sa.text(
-                        "CREATE INDEX ix_jobs_next_run_utc "
-                        "ON jobs (next_run_utc)"
+            try:
+                with self._engine.begin() as connection:
+                    connection.execute(
+                        sa.text(
+                            "CREATE INDEX ix_jobs_next_run_utc "
+                            "ON jobs (next_run_utc)"
+                        )
                     )
-                )
+            except OperationalError as exc:
+                if "already exists" not in str(exc).lower():
+                    raise
         if "job_run_snapshots" not in inspector.get_table_names():
-            self.snapshots.create(self._engine, checkfirst=True)
+            try:
+                self.snapshots.create(self._engine, checkfirst=True)
+            except OperationalError as exc:
+                if "already exists" not in str(exc).lower():
+                    raise
         self._backfill_next_run_utc()
 
     def _backfill_next_run_utc(self) -> None:
