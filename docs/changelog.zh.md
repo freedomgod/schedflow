@@ -14,6 +14,8 @@
   `Job.on_restart` 支持 none/resume/rerun 自动恢复；
 - **工作流级总超时**：`Workflow.run(timeout=...)` / `Job.workflow_timeout`，
   超时节点标记 `workflow_timeout`；
+- **可观测性与集成**：无依赖 Prometheus `/api/metrics`、SSE 执行事件流、
+  WebhookEventSink、`SCHEDFLOW_LOG_FORMAT=json` 结构化日志、写请求 token bucket 限流；
 - **`Workflow`**：以 `add_task()/add_edge()` 构建 DAG，支持拓扑分层并行、条件边、环路检测（`CycleError`）、`_pre_results` 注入、重试/超时/回调，`to_dict()/from_dict()` 作为唯一 JSON 序列化出口；
 - **`TaskSpec`**：四种任务类型 `python_callable` / `python` / `python_script` / `bash`，子进程任务支持环境变量、工作目录、超时；
 - **`ExecutionLog` / `TaskRecord`**：结构化执行日志，记录每个节点的状态、结果、错误、stdout/stderr、退出码与耗时；

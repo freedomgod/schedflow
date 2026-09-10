@@ -259,6 +259,25 @@ print([node for node, rec in resumed.records.items() if rec.resumed])
 执行。将 `Job.on_restart` 设为 `resume` 或 `rerun`，调度器启动时会自动处理上次
 中断的运行。完整可运行示例见 `examples/resume_execution_example.py`。
 
+## Webhook 与 API 限流
+
+```python
+# 通过管理 API 配置（也可在前端「可观测性与集成」页面操作）
+PUT /api/v1/settings/webhooks
+{"webhooks": [
+  {"url": "https://hooks.example.com/schedflow",
+   "events": ["job.succeeded", "job.failed"],
+   "secret": "shared-secret"}
+]}
+
+PUT /api/v1/settings/rate-limit
+{"enabled": true, "rpm": 120}
+```
+
+Webhook 投递为 best-effort：内存队列有界、单次请求 5s 超时、最多 3 次指数退避；
+失败会记录日志并增加 `schedflow_webhook_failures_total` 指标。限流仅作用于
+`/api/` 下的写请求，读取与 `/api/metrics` 不受影响。
+
 ## 自定义组件
 
 自定义组件通过**继承公开基类**实现，直接以实例注入，无需注册入口点：

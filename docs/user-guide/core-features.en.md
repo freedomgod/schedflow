@@ -440,6 +440,20 @@ bus.subscribe("job.failed", callback)
 bus.unsubscribe("job.failed", callback)
 ```
 
+## Observability and integrations
+
+- **Prometheus metrics**: `GET /api/metrics` exposes scheduler state, run
+  outcomes/durations, queue depth and listener/main-loop error counters;
+- **SSE execution events**: `GET /api/v1/sse/jobs/{job_id}/events` streams
+  `job.*` and `task.*` events, replaying the latest run summary on connect;
+- **Webhooks**: `PUT /api/v1/settings/webhooks` configures `url/events/secret`
+  with a bounded queue and limited retries; failures never block scheduling;
+- **API rate limiting**: `PUT /api/v1/settings/rate-limit` (`enabled/rpm`)
+  applies an in-process token bucket to write requests, returning 429 with
+  `Retry-After`;
+- **Structured logs**: `SCHEDFLOW_LOG_FORMAT=json` emits JSON lines with
+  `job_id/execution_id/node_id/status/duration_ms`.
+
 ## Configuration
 
 ### Timezone

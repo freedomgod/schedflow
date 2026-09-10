@@ -221,7 +221,8 @@
         "“用户 / 调用方”泛指仓库外的 Web UI、CLI 等接入端",
         "触发器、执行器、存储器走静态注册表扩展",
         "认证（JWT / API Key）保护管理与执行接口",
-        "workflow_timeout 提供 DAG 级墙钟总超时"
+        "workflow_timeout 提供 DAG 级墙钟总超时",
+        "EventBus 订阅者可将事件外发到 Webhook / Prometheus / SSE（无消息中间件）"
       ]
     }
   ]

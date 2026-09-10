@@ -442,6 +442,19 @@ bus.subscribe("job.failed", callback)
 bus.unsubscribe("job.failed", callback)
 ```
 
+## 可观测性与集成
+
+- **Prometheus 指标**：`GET /api/metrics` 输出文本格式，包含调度器状态、job 运行结果与
+  耗时、队列深度、listener/主循环错误计数；
+- **SSE 执行事件**：`GET /api/v1/sse/jobs/{job_id}/events` 推送
+  `job.*` 与 `task.*` 事件，连接时回放最近一次运行摘要；
+- **Webhook**：`PUT /api/v1/settings/webhooks` 配置 `url/events/secret`，以有界队列 +
+  有限重试投递；失败不会阻塞调度；
+- **API 限流**：`PUT /api/v1/settings/rate-limit`（`enabled/rpm`）对写请求启用进程内
+  token bucket，超限返回 429 + `Retry-After`；
+- **结构化日志**：`SCHEDFLOW_LOG_FORMAT=json` 输出带
+  `job_id/execution_id/node_id/status/duration_ms` 的 JSON 行日志。
+
 ## 配置
 
 ### 时区

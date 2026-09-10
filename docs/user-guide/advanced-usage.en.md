@@ -261,6 +261,26 @@ the workflow fingerprint still matches. Set `Job.on_restart` to `resume` or
 `rerun` to handle interrupted runs automatically when the scheduler starts.
 See `examples/resume_execution_example.py` for a complete runnable example.
 
+## Webhooks and API rate limiting
+
+```python
+# Configure via the management API (or the UI settings page)
+PUT /api/v1/settings/webhooks
+{"webhooks": [
+  {"url": "https://hooks.example.com/schedflow",
+   "events": ["job.succeeded", "job.failed"],
+   "secret": "shared-secret"}
+]}
+
+PUT /api/v1/settings/rate-limit
+{"enabled": true, "rpm": 120}
+```
+
+Webhook delivery is best effort: a bounded in-memory queue, a 5s request
+timeout and up to 3 exponential-backoff retries; failures are logged and counted
+in `schedflow_webhook_failures_total`. Rate limiting only applies to write
+requests under `/api/`; reads and `/api/metrics` are unaffected.
+
 ## Custom components
 
 Custom components are implemented by **subclassing the public base classes** and injecting instances directly — no entry points required:

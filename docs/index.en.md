@@ -28,6 +28,7 @@ SchedFlow is a lightweight **DAG workflow scheduling framework**: a "job" is no 
 | **Executors** | `ThreadPoolExecutor` / `ProcessPoolExecutor` (JSON worker protocol, Windows-ready) / `DebugExecutor` |
 | **Execution logs** | `ExecutionLog` records per-node status, result, error, timing and a DAG snapshot |
 | **Web API** | Structured FastAPI REST API (`/api`) with a unified `{"code": 0, "data": ..., "message": "ok"}` response |
+| **Observability** | Prometheus `/api/metrics`, SSE execution events, webhook notifications, structured JSON logs and API rate limiting |
 | **Dashboard** | Vue 3 + Element Plus UI: DAG editor, job management, execution logs, dark/light themes |
 
 ## Quick Example

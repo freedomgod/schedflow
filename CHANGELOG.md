@@ -11,6 +11,8 @@
   EventBus 监听器异常可见化。
 - **运行快照与断点续跑**：RunSnapshot（四类 JobStore 持久化）、full/resume
   执行模式、`on_restart` 自动恢复、`workflow_timeout` 总超时。
+- **可观测性与集成**：Prometheus `/api/metrics`、SSE 执行事件、Webhook 通知、
+  JSON 结构化日志与写请求限流。
 
 ## 0.0.1 (2026-08-08)
 

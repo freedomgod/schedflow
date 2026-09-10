@@ -20,6 +20,15 @@
   ExecutionLog；
 - `ExecutionLog` 新增 `mode`、`resumes_from`，`TaskRecord` 新增 `resumed`。
 
+## P2 行为说明（可观测性与集成）
+
+- `GET /api/metrics`：Prometheus 文本格式（无需额外依赖）；
+- `GET /api/v1/sse/jobs/{job_id}/events`：`job.*` / `task.*` 事件流；
+- `GET/PUT /api/v1/settings/webhooks`：Webhook 订阅配置；
+- `GET/PUT /api/v1/settings/rate-limit`：写请求限流（默认关闭，超限 429 +
+  `Retry-After`）；
+- 环境变量 `SCHEDFLOW_LOG_FORMAT=json` 启用结构化日志。
+
 ## 核心对象（schedflow.core）
 
 ### 工作流（Workflow）

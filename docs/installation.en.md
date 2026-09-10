@@ -116,6 +116,20 @@ mkdocs serve      # live preview at http://localhost:8000
 mkdocs build      # build the static site into site/
 ```
 
+## Observability environment variables
+
+```ini
+# .env
+SCHEDFLOW_LOG_FORMAT=json   # JSON line logs on key paths (default: text)
+LOG_LEVEL=INFO
+```
+
+Webhooks, the Prometheus `/api/metrics` endpoint and the execution-event SSE
+stream are all in-process capabilities with no extra dependencies. Webhook and
+rate-limit settings can be configured from the "Observability & Integrations"
+page or via `PUT /api/v1/settings/webhooks` and
+`PUT /api/v1/settings/rate-limit`.
+
 ## Next steps
 
 - Follow the **[Quickstart](quickstart.md)** to build your first DAG workflow

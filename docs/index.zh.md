@@ -28,6 +28,7 @@ SchedFlow 是一个轻量级的 **DAG 工作流调度框架**：一个“作业�
 | **执行器** | `ThreadPoolExecutor` / `ProcessPoolExecutor`（JSON worker 协议，Windows 可用）/ `DebugExecutor` / `AsyncIOExecutor` 等 |
 | **执行日志** | `ExecutionLog` 记录每个节点的状态、结果、错误、耗时与 DAG 快照，可持久化可查询 |
 | **Web API** | FastAPI 结构化 REST API（`/api`），统一 `{"code": 0, "data": ..., "message": "ok"}` 响应格式 |
+| **可观测性** | Prometheus `/api/metrics`、SSE 执行事件、Webhook 通知、结构化 JSON 日志、API 限流 |
 | **管理面板** | Vue 3 + Element Plus Web 界面：DAG 编辑器、作业管理、执行日志、暗色/亮色主题 |
 
 ## 快速示例

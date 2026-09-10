@@ -16,6 +16,9 @@
   protection; `Job.on_restart` supports none/resume/rerun automatic recovery;
 - **Workflow-level timeout**: `Workflow.run(timeout=...)` /
   `Job.workflow_timeout` with `workflow_timeout` node markers;
+- **Observability and integrations**: dependency-free Prometheus `/api/metrics`,
+  SSE execution events, `WebhookEventSink`, `SCHEDFLOW_LOG_FORMAT=json`
+  structured logs and token-bucket rate limiting for write requests;
 - **`Workflow`**: build DAGs with `add_task()/add_edge()`; topological generation-based parallelism, conditional edges, cycle detection (`CycleError`), `_pre_results` injection, retries/timeouts/callbacks, and `to_dict()/from_dict()` as the single JSON serialization path;
 - **`TaskSpec`**: four task types `python_callable` / `python` / `python_script` / `bash`, with subprocess env/cwd/timeout support;
 - **`ExecutionLog` / `TaskRecord`**: structured execution logs with per-node status, result, error, stdout/stderr, exit code and duration;

@@ -115,6 +115,18 @@ mkdocs serve      # 本地预览 http://localhost:8000
 mkdocs build      # 构建静态站点到 site/
 ```
 
+## 可观测性环境变量
+
+```ini
+# .env
+SCHEDFLOW_LOG_FORMAT=json   # 关键路径输出 JSON 行日志（默认 text）
+LOG_LEVEL=INFO
+```
+
+Webhook、Prometheus `/api/metrics` 与执行事件 SSE 都是进程内能力，无需额外依赖；
+Webhook 与限流参数可在管理端「可观测性与集成」页面或
+`PUT /api/v1/settings/webhooks`、`PUT /api/v1/settings/rate-limit` 配置。
+
 ## 下一步
 
 - 跟随**[快速上手](quickstart.md)**创建你的第一个 DAG 工作流
