@@ -35,6 +35,7 @@ class TaskRecord:
         "exit_code",
         "node_id",
         "result",
+        "resumed",
         "skip_reason",
         "start_time",
         "status",
@@ -57,6 +58,7 @@ class TaskRecord:
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         duration: float | None = None,
+        resumed: bool = False,
     ) -> None:
         if status not in TaskStatus:
             raise ValueError(f"Unknown task status {status!r}")
@@ -72,6 +74,7 @@ class TaskRecord:
         self.start_time = start_time
         self.end_time = end_time
         self.duration = duration
+        self.resumed = bool(resumed)
 
     def mark_started(self) -> None:
         self.start_time = datetime.now()
@@ -115,6 +118,7 @@ class TaskRecord:
             "start_time": _iso(self.start_time),
             "end_time": _iso(self.end_time),
             "duration": self.duration,
+            "resumed": self.resumed,
         }
 
     @classmethod
@@ -132,6 +136,7 @@ class TaskRecord:
             start_time=_from_iso(data.get("start_time")),
             end_time=_from_iso(data.get("end_time")),
             duration=data.get("duration"),
+            resumed=bool(data.get("resumed", False)),
         )
 
     def __repr__(self) -> str:
@@ -147,7 +152,9 @@ class ExecutionLog:
         "flow_id",
         "job_id",
         "log_id",
+        "mode",
         "records",
+        "resumes_from",
         "start_time",
     )
 
@@ -158,6 +165,8 @@ class ExecutionLog:
         job_id: str | None = None,
         log_id: str | None = None,
         start_time: datetime | None = None,
+        mode: str = "full",
+        resumes_from: str | None = None,
     ) -> None:
         self.log_id = log_id or CustomTypeID.full_str("flowlog")
         self.flow_id = flow_id
@@ -166,12 +175,21 @@ class ExecutionLog:
         self.end_time: datetime | None = None
         self.records: dict[str, TaskRecord] = {}
         self.dag_snapshot: dict | None = None
+        self.mode = mode
+        self.resumes_from = resumes_from
 
     @property
     def succeeded(self) -> bool:
         """True when no node failed or was cancelled."""
         return all(
             record.status not in ("failed", "cancelled")
+            for record in self.records.values()
+        ) and not self.timed_out
+
+    @property
+    def timed_out(self) -> bool:
+        return any(
+            record.skip_reason == "workflow_timeout"
             for record in self.records.values()
         )
 
@@ -202,6 +220,8 @@ class ExecutionLog:
             "log_id": self.log_id,
             "job_id": self.job_id,
             "flow_id": self.flow_id,
+            "mode": self.mode,
+            "resumes_from": self.resumes_from,
             "start_time": _iso(self.start_time),
             "end_time": _iso(self.end_time),
             "duration": self.duration,
@@ -219,6 +239,8 @@ class ExecutionLog:
             job_id=data.get("job_id"),
             log_id=data.get("log_id"),
             start_time=_from_iso(data.get("start_time")),
+            mode=data.get("mode", "full"),
+            resumes_from=data.get("resumes_from"),
         )
         log.end_time = _from_iso(data.get("end_time"))
         log.records = {

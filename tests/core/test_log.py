@@ -119,3 +119,34 @@ def test_cancelled_record_and_log_flag():
     )
     assert log.cancelled is True
     assert log.succeeded is False
+
+
+def test_log_mode_and_resume_fields_roundtrip():
+    log = ExecutionLog(flow_id="wf", job_id="j1")
+    log.mode = "resume"
+    log.resumes_from = "run-0"
+    record = TaskRecord(node_id="a", task_id="a", status="succeeded")
+    record.resumed = True
+    log.records["a"] = record
+    log.finalize()
+
+    restored = ExecutionLog.from_dict(log.to_dict())
+
+    assert restored.mode == "resume"
+    assert restored.resumes_from == "run-0"
+    assert restored.records["a"].resumed is True
+
+
+def test_log_timed_out_is_not_succeeded():
+    log = ExecutionLog(flow_id="wf")
+    log.records["a"] = TaskRecord(node_id="a", task_id="a", status="succeeded")
+    log.records["b"] = TaskRecord(
+        node_id="b",
+        task_id="b",
+        status="skipped",
+        skip_reason="workflow_timeout",
+    )
+    log.finalize()
+
+    assert log.timed_out is True
+    assert log.succeeded is False
