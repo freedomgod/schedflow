@@ -140,13 +140,6 @@ function kwargTypeTag(type: string): string {
   margin-bottom: 0;
 }
 
-.section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #606266;
-  margin: 0 0 8px 0;
-}
-
 .kwargs-section {
   margin-bottom: 16px;
 }

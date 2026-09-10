@@ -250,24 +250,6 @@ onBeforeUnmount(stopSSE)
   gap: 8px;
 }
 
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: white;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: var(--shadow-glow); }
-.btn-primary:active { transform: translateY(0) scale(0.98); }
-
 .btn-ghost {
   display: inline-flex;
   align-items: center;
@@ -361,47 +343,6 @@ onBeforeUnmount(stopSSE)
 .cell-tag { font-size: 12px; color: var(--text-secondary); }
 .cell-time { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 .cell-actions { display: flex; gap: 4px; }
-
-.action-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.action-btn:hover { background: var(--bg-surface-hover); color: var(--text-primary); border-color: var(--border-default); }
-.action-btn.danger:hover { background: var(--color-danger-soft); color: var(--color-danger); border-color: rgba(239,68,68,0.3); }
-
-/* ── Toggle Switch ── */
-.toggle-switch {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  border-radius: 11px;
-  border: none;
-  background: var(--border-default);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  flex-shrink: 0;
-}
-.toggle-switch.active { background: var(--color-success); }
-.toggle-switch.loading { opacity: 0.6; cursor: wait; }
-.toggle-switch .toggle-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: white;
-  transition: transform var(--transition-fast);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-.toggle-switch.active .toggle-thumb { transform: translateX(18px); }
 
 /* ── Empty ──────── */
 .empty-state {

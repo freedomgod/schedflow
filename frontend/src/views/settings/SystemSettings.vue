@@ -83,10 +83,7 @@ onMounted(() => {
 <style scoped>
 .system-settings { max-width: 960px; }
 
-.page-title { font-size: 22px; font-weight: 700; margin: 0 0 var(--space-lg); }
-
 /* Tabs */
-.settings-tabs { display: flex; gap: 0; margin-bottom: var(--space-lg); border-bottom: 1px solid var(--border-subtle); }
 .settings-tab {
   padding: 12px 22px;
   border: none;

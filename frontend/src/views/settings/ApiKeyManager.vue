@@ -135,13 +135,4 @@ onMounted(() => {
   justify-content: space-between;
   margin-bottom: 8px;
 }
-.section-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-.section-desc {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  margin: 0 0 16px;
-}
 </style>

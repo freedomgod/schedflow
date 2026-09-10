@@ -343,10 +343,6 @@ onBeforeUnmount(() => { stopSSE() })
 .header-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* Buttons */
-.btn-primary { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border: none; border-radius: var(--radius-md); background: var(--color-primary); color: white; font-size: 13px; font-weight: 600; font-family: var(--font-body); cursor: pointer; transition: all var(--transition-fast); }
-.btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); box-shadow: var(--shadow-glow); }
-.btn-primary:active:not(:disabled) { transform: translateY(0) scale(0.98); }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface); color: var(--text-secondary); font-size: 13px; font-weight: 500; font-family: var(--font-body); cursor: pointer; transition: all var(--transition-fast); }
 .btn-ghost:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
 
@@ -399,12 +395,8 @@ onBeforeUnmount(() => { stopSSE() })
 
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-group label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
 .label-hint { font-weight: 400; color: var(--text-muted); font-size: 12px; }
 
-.form-input { padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 14px; font-family: var(--font-body); outline: none; transition: border-color var(--transition-fast); }
-.form-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
 select.form-input { cursor: pointer; }
 .form-textarea { resize: vertical; min-height: 100px; }
 
@@ -412,12 +404,6 @@ select.form-input { cursor: pointer; }
 .form-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-subtle); }
 
 .edit-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 16px var(--space-lg); border-top: 1px solid var(--border-subtle); }
-
-/* Toggle */
-.toggle-switch { position: relative; width: 40px; height: 22px; border-radius: 11px; border: none; background: var(--border-default); cursor: pointer; transition: background var(--transition-fast); }
-.toggle-switch.active { background: var(--color-success); }
-.toggle-switch .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: white; transition: transform var(--transition-fast); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-.toggle-switch.active .toggle-thumb { transform: translateX(18px); }
 
 /* Desc editor */
 .desc-editor-toolbar { display: flex; gap: 4px; margin-bottom: 8px; }

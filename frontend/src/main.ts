@@ -5,6 +5,7 @@ import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import '@logicflow/core/dist/index.css'
 
+import './styles/components.css'
 import App from './App.vue'
 import router, { setupRouterGuard } from './router'
 
