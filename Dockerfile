@@ -19,8 +19,8 @@ VOLUME /app/data
 EXPOSE 8000
 CMD ["schedflow-backend", "--host", "0.0.0.0", "--port", "8000"]
 
-# ── Web dashboard ────────────────────────────────────────────────────────
-FROM node:22-alpine AS web
+# ── Web dashboard build ──────────────────────────────────────────────────
+FROM node:22-alpine AS web-build
 
 WORKDIR /app/frontend
 
@@ -29,10 +29,17 @@ RUN npm ci
 
 COPY frontend/index.html frontend/vite.config.ts frontend/env.d.ts frontend/tsconfig*.json ./
 COPY frontend/src ./src
+COPY frontend/scripts ./scripts
 
-# The /api proxy target; compose sets it to http://api:8000.
-ENV SCHEDFLOW_API_URL=http://127.0.0.1:8000
 RUN npm run build-only
 
-EXPOSE 4173
-CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "4173"]
+# ── Web dashboard (static + /api reverse proxy) ──────────────────────────
+FROM nginx:alpine AS web
+
+# The /api origin; compose sets it to http://api:8000. The official image
+# renders /etc/nginx/templates/*.template through envsubst at start-up.
+ENV SCHEDFLOW_API_URL=http://api:8000
+COPY frontend/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=web-build /app/frontend/dist /usr/share/nginx/html
+
+EXPOSE 80

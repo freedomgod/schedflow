@@ -140,11 +140,21 @@ app = create_app(Scheduler(), title="调度器 API")
 uv run schedflow-backend        # 生产模式：关闭热重载、INFO 日志（默认）
 uv run schedflow-backend --dev  # 开发模式：热重载 + DEBUG 日志
 
-uv run schedflow-frontend        # 生产模式：构建（按需）后以 vite preview 提供服务（默认）
+uv run schedflow-frontend        # 本地预览：构建（按需）后以 vite preview 提供服务（默认）
 uv run schedflow-frontend --dev  # 开发模式：Vite 开发服务器（热更新）
 ```
 
 生产模式默认不启用文件监听，避免 `data/jobs.db` 等运行期文件的写入被 uvicorn 热重载器当作“变更”打印，也不会因热重载产生多个调度器进程。开发模式下，`data/jobs.db`、`.git` 等文件已被加入重载排除列表，不会触发重启或刷屏。
+
+> `schedflow-frontend`（不带 `--dev`）用于本机预览构建产物；真正的生产部署走容器：`web` 服务由 `nginx:alpine` 托管 `frontend/dist`，`/assets` 命中 `immutable` 长缓存、`index.html` 不缓存、`/api` 与 `/api/v1/sse/` 反向代理到 `api:8000`（SSE 关闭了 buffering）。每次构建前会清理 `dist`，避免旧哈希分包堆积。
+
+## 容器部署
+
+```bash
+docker compose up --build -d      # api: 18000，web(nginx): 18001
+```
+
+`SCHEDFLOW_API_PORT` / `SCHEDFLOW_WEB_PORT` 可覆盖默认端口映射，`SCHEDFLOW_API_URL` 用于指定 nginx 反代的上游地址（默认 `http://api:8000`）。
 
 ## 开发
 

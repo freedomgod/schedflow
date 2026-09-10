@@ -23,7 +23,7 @@ services:
     environment:
       SCHEDFLOW_API_URL: ${SCHEDFLOW_API_URL:-http://api:8000}
     ports:
-      - "${SCHEDFLOW_BIND_HOST:-127.0.0.1}:${SCHEDFLOW_WEB_PORT:-18001}:4173"
+      - "${SCHEDFLOW_BIND_HOST:-127.0.0.1}:${SCHEDFLOW_WEB_PORT:-18001}:80"
     depends_on:
       - api
     restart: unless-stopped
