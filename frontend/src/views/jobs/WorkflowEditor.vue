@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import LogicFlow, { RectNode, RectNodeModel, h } from '@logicflow/core'
-import dagre, { Graph } from 'dagre'
+import { computeDagreLayout } from './dagreLayout'
 import NodeConfigDrawer from './NodeConfigDrawer.vue'
 import EdgeConfigDrawer from './EdgeConfigDrawer.vue'
 import type { DagData, EdgeProperties, TaskNodeProperties, KeyValuePair } from '@/types/workflow'
@@ -194,36 +194,26 @@ function applyAutoLayout() {
 
   if (rawNodes.length === 0) return
 
-  const g = new Graph()
-  g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 80, marginx: 80, marginy: 80 })
-  g.setDefaultEdgeLabel(() => ({}))
+  const positions = computeDagreLayout(
+    rawNodes.map((node) => ({
+      node_id: node.id,
+      task_node: { name: node.id, func: {} },
+    })) as any,
+    rawEdges.map((edge) => ({
+      source: edge.sourceNodeId,
+      target: edge.targetNodeId,
+    })) as any,
+  )
 
-  rawNodes.forEach((node) => {
-    g.setNode(node.id, { width: 150, height: 50 })
-  })
-  rawEdges.forEach((edge) => {
-    g.setEdge(edge.sourceNodeId, edge.targetNodeId)
-  })
-
-  try {
-    dagre(g)
-  } catch (e) {
-    console.error('Dagre layout error:', e)
-    return
-  }
-
-  rawNodes.forEach((node) => {
-    const pos = g.node(node.id)
-    if (pos) {
-      const nodeModel = lfInstance.value!.getNodeModelById(node.id)
-      if (nodeModel) {
-        nodeModel.moveTo(pos.x, pos.y)
-        if (props.readonly) {
-          nodeModel.draggable = false
-        }
+  for (const [nodeId, pos] of positions) {
+    const nodeModel = lfInstance.value.getNodeModelById(nodeId)
+    if (nodeModel) {
+      nodeModel.moveTo(pos.x, pos.y)
+      if (props.readonly) {
+        nodeModel.draggable = false
       }
     }
-  })
+  }
 }
 
 function syncReadonlyState() {
@@ -603,39 +593,6 @@ function inferType(value: unknown): KeyValuePair['type'] {
   return 'string'
 }
 
-function computeDagreLayout(data: DagData): Map<string, { x: number; y: number }> {
-  const positions = new Map<string, { x: number; y: number }>()
-
-  if (data.nodes.length === 0) return positions
-
-  const g = new Graph()
-  g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 80, marginx: 80, marginy: 80 })
-  g.setDefaultEdgeLabel(() => ({}))
-
-  for (const node of data.nodes) {
-    g.setNode(node.node_id, { width: 150, height: 50 })
-  }
-  for (const edge of data.edges) {
-    g.setEdge(edge.source, edge.target)
-  }
-
-  try {
-    dagre(g)
-  } catch (e) {
-    console.error('Dagre layout error:', e)
-    return positions
-  }
-
-  for (const node of data.nodes) {
-    const pos = g.node(node.node_id)
-    if (pos) {
-      positions.set(node.node_id, { x: pos.x, y: pos.y })
-    }
-  }
-
-  return positions
-}
-
 function loadDag(data: DagData) {
   if (!lfInstance.value) return
 
@@ -646,7 +603,7 @@ function loadDag(data: DagData) {
   nodeStatusColors.value.clear()
   lf.clearData()
 
-  const positions = computeDagreLayout(data)
+  const positions = computeDagreLayout(data.nodes, data.edges)
 
   for (const dagNode of data.nodes) {
     const pos = positions.get(dagNode.node_id)

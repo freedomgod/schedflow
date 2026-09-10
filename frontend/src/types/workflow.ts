@@ -32,6 +32,12 @@ export interface KeyValuePair {
   type: 'string' | 'number' | 'boolean'
 }
 
+/** 画布节点坐标 */
+export interface NodePosition {
+  x: number
+  y: number
+}
+
 /** 任务节点模型 — 对应后端 TaskNodeModel (JSON 序列化) */
 export interface TaskNodeData {
   task_id: string
