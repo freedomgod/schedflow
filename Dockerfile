@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # ── Backend API + scheduler ──────────────────────────────────────────────
 FROM python:3.12-slim AS backend
 
@@ -15,10 +13,12 @@ COPY src ./src
 # Override with --build-arg when the default index is slow or unreachable.
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
-# The pip cache mount survives rebuilds even though the image itself keeps
-# no pip cache (PIP_NO_CACHE_DIR=1), so repeat builds skip re-downloading.
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --index-url "$PIP_INDEX_URL" \
+# Kept plain on purpose: `RUN --mount=type=cache` (the usual way to cache
+# downloaded wheels across builds) needs the docker/dockerfile frontend
+# image pulled from Docker Hub, which fails on some networks. Set
+# DOCKER_BUILDKIT=1 with the frontend mirrored in a reachable registry if
+# you want that cache back.
+RUN pip install --index-url "$PIP_INDEX_URL" \
         ".[web,sqlalchemy,redis,mongodb]"
 
 # Runtime data (SQLite databases) lives in a mounted volume.
