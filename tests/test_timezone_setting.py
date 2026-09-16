@@ -102,19 +102,32 @@ def test_put_timezone_rejects_unknown_zone_with_clear_message():
     assert "Mars/Phobos" in resp.json()["detail"]
 
 
-def test_put_null_timezone_restores_system_default():
+def test_put_null_timezone_restores_system_default(monkeypatch):
+    """Clearing the setting also moves the live scheduler back to the local zone.
+
+    The process zone is pinned to UTC so this holds on any host: when the host
+    zone happens to share an offset with the configured zone (Asia/Shanghai on
+    a China-configured machine), a scheduler that was never reset still looks
+    correct and the regression stays invisible.
+    """
+    monkeypatch.setattr(
+        "schedflow.settings.services.get_localzone", lambda: ZoneInfo("Etc/UTC")
+    )
+    monkeypatch.setattr(
+        "schedflow.core.scheduler.get_localzone", lambda: ZoneInfo("Etc/UTC")
+    )
     set_timezone("Asia/Shanghai")
 
     with _client() as client:
+        assert client.app.state.scheduler.timezone == ZoneInfo("Asia/Shanghai")
+
         resp = client.put("/api/v1/settings/timezone", json={"timezone": None})
         assert resp.status_code == 200, resp.text
         data = resp.json()["data"]
 
         assert data["configured"] is False
-        assert data["timezone"] == str(get_localzone())
-        assert client.app.state.scheduler.timezone.utcoffset(
-            datetime.now()
-        ) == get_localzone().utcoffset(datetime.now())
+        assert data["timezone"] == "Etc/UTC"
+        assert client.app.state.scheduler.timezone == ZoneInfo("Etc/UTC")
 
 
 def test_scheduler_uses_persisted_timezone_at_startup():

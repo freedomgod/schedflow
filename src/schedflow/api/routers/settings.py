@@ -83,7 +83,7 @@ def timezone_set(
         set_timezone(request.timezone)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    apply_scheduler_timezone(scheduler)
+    apply_scheduler_timezone(scheduler, include_reset=True)
     return APIResponse(data=_timezone_payload())
 
 

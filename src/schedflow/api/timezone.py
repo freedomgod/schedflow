@@ -29,15 +29,22 @@ TIMEZONE_AWARE_TYPES = frozenset(
 COMBINING_TYPES = frozenset({"and", "or"})
 
 
-def apply_scheduler_timezone(scheduler: Scheduler) -> None:
+def apply_scheduler_timezone(
+    scheduler: Scheduler, *, include_reset: bool = False
+) -> None:
     """Point the live scheduler at the configured zone.
 
-    No-op when nothing is configured, so a programmatically created
-    ``Scheduler(timezone=...)`` is never silently overridden.
+    At startup (``include_reset=False``) an unset setting is a no-op, so a
+    programmatically created ``Scheduler(timezone=...)`` is never silently
+    overridden. An explicit settings change passes ``include_reset=True``:
+    clearing the setting has to move the scheduler back to the process-local
+    zone instead of leaving the previously configured value behind.
     """
     configured = get_configured_timezone()
     if configured:
         scheduler.set_timezone(configured)
+    elif include_reset:
+        scheduler.set_timezone(None)
 
 
 def with_default_timezone(payload: dict[str, Any] | None) -> dict[str, Any] | None:
