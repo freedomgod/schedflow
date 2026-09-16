@@ -109,6 +109,19 @@ class Scheduler:
         self._thread: threading.Thread | None = None
         gauge_set("schedflow_scheduler_state", 0)
 
+    # ── timezone ────────────────────────────────────────────────────────
+
+    @property
+    def timezone(self):
+        """Timezone used for the main loop's ``now`` and scheduling math."""
+        return self._timezone
+
+    def set_timezone(self, timezone=None) -> None:
+        """Replace the scheduler timezone (``None`` restores the local zone)."""
+        self._timezone = (
+            astimezone(timezone) if timezone is not None else get_localzone()
+        )
+
     # ── component management ────────────────────────────────────────────
 
     def set_jobstore(self, jobstore: JobStore, alias: str = "default") -> None:

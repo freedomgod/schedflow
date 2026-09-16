@@ -177,12 +177,33 @@
       </el-form-item>
     </template>
 
+    <!-- Timezone (cron / interval; a date trigger always fires at an absolute instant) -->
+    <template v-if="supportsTimezone">
+      <el-form-item label="时区">
+        <el-select
+          v-model="localArgs.timezone"
+          filterable
+          allow-create
+          default-first-option
+          placeholder="选择时区"
+          style="width: 100%"
+        >
+          <el-option v-for="tz in timezoneOptions" :key="tz" :label="tz" :value="tz" />
+        </el-select>
+      </el-form-item>
+      <span class="form-tip">
+        默认为系统设置里的时区（当前 {{ defaultTimezone || '-' }}）；此处可用 IANA 名称覆盖本任务。
+      </span>
+    </template>
+
     <span v-if="triggerType === 'cron'" class="form-tip">支持 Cron/Crontab 表达式，* 表示所有值。格式: 秒 分 时 日 月 星期几</span>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+
+import { browserTimezones, getTimezone } from '@/api/settings'
 
 interface TriggerArgs {
   // Cron fields
@@ -205,6 +226,8 @@ interface TriggerArgs {
   hours: number | undefined
   minutes: number | undefined
   seconds: number | undefined
+  // Shared
+  timezone: string
 }
 
 const props = defineProps<{
@@ -235,15 +258,22 @@ function defaultArgs(): TriggerArgs {
     hours: undefined,
     minutes: undefined,
     seconds: undefined,
+    timezone: '',
   }
 }
 
 const localArgs = reactive<TriggerArgs>(defaultArgs())
 const jsonText = ref('')
+const timezoneOptions = ref<string[]>([])
+const defaultTimezone = ref('')
 
 const JSON_FALLBACK_TYPES = ['calendarinterval', 'and', 'or']
 
 const isJsonFallback = computed(() => JSON_FALLBACK_TYPES.includes(props.triggerType))
+
+const supportsTimezone = computed(
+  () => !isJsonFallback.value && ['cron', 'interval'].includes(props.triggerType),
+)
 
 function dateToISO(val: Date | null): string | undefined {
   if (val instanceof Date) return val.toISOString()
@@ -267,6 +297,10 @@ function buildArgs(): Record<string, unknown> {
   }
 
   const result: Record<string, unknown> = {}
+
+  if (supportsTimezone.value && localArgs.timezone) {
+    result.timezone = localArgs.timezone
+  }
 
   if (props.triggerType === 'cron') {
     const cronFields = [
@@ -310,10 +344,26 @@ function buildArgs(): Record<string, unknown> {
 function resetFields() {
   Object.assign(localArgs, defaultArgs())
   jsonText.value = ''
+  localArgs.timezone = defaultTimezone.value
 }
 
 watch(() => props.triggerType, () => {
   resetFields()
+})
+
+onMounted(async () => {
+  try {
+    const info = await getTimezone()
+    defaultTimezone.value = info.timezone
+    timezoneOptions.value = Array.from(
+      new Set([...info.available, ...browserTimezones(), info.timezone]),
+    ).sort()
+    if (!localArgs.timezone) {
+      localArgs.timezone = info.timezone
+    }
+  } catch {
+    /* the backend fills in the system default when the field is empty */
+  }
 })
 
 watch(jsonText, (val) => {
@@ -335,6 +385,8 @@ function setTriggerArgs(args: Record<string, unknown>) {
     jsonText.value = JSON.stringify(args, null, 2)
     return
   }
+
+  localArgs.timezone = args.timezone ? String(args.timezone) : defaultTimezone.value
 
   if (props.triggerType === 'cron') {
     const strKeys = ['year', 'month', 'day', 'week', 'day_of_week', 'hour', 'minute', 'second']

@@ -468,6 +468,21 @@ Scheduler(timezone="Asia/Shanghai")
 Scheduler(timezone=timezone.utc)
 ```
 
+Web 层额外提供了一个**系统默认时区**，供未显式指定时区的触发器使用：
+
+```bash
+GET /api/v1/settings/timezone            # 生效时区、是否已配置、进程时区、可选列表
+PUT /api/v1/settings/timezone            # {"timezone": "Asia/Shanghai"}；传 null 恢复跟随系统
+```
+
+时区优先级（从高到低）：触发器参数里的 `timezone` → 系统默认时区 →
+进程本地时区（容器未设置 `TZ` 时为 `Etc/UTC`）。
+
+容器部署建议把默认时区设成业务所在时区，否则 UTC 容器里的 `hour=9` 会按 09:00 UTC
+触发。注意设置只影响**新建/更新**的任务：已创建任务的时区保存在各自的
+`trigger.args` 中，若容器缺少时区数据库（`tzdata`），保存非 UTC 时区会返回
+422 并提示安装 `tzdata`。
+
 ### 作业默认值
 
 ```python

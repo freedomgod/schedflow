@@ -467,6 +467,24 @@ Scheduler(timezone="Asia/Shanghai")
 Scheduler(timezone=timezone.utc)
 ```
 
+The web layer also exposes a **system default timezone** for triggers that do
+not specify one:
+
+```bash
+GET /api/v1/settings/timezone            # effective zone, whether configured, process zone, options
+PUT /api/v1/settings/timezone            # {"timezone": "Asia/Shanghai"}; null follows the system zone
+```
+
+Precedence, highest first: the trigger's own `timezone` argument, then the
+system default, then the process-local zone (``Etc/UTC`` in a container that
+does not set ``TZ``).
+
+Set it when deploying in a container with business hours in a different zone:
+otherwise ``hour=9`` in a UTC container fires at 09:00 UTC. The setting only
+affects jobs that are created or updated afterwards, because each job stores its
+timezone in ``trigger.args``. Saving a non-UTC zone on an image without the
+timezone database (``tzdata``) returns 422 with a hint to install it.
+
 ### Job defaults
 
 ```python

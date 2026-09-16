@@ -13,6 +13,10 @@
   执行模式、`on_restart` 自动恢复、`workflow_timeout` 总超时。
 - **可观测性与集成**：Prometheus `/api/metrics`、SSE 执行事件、Webhook 通知、
   JSON 结构化日志与写请求限流。
+- **系统默认时区**：`GET/PUT /api/v1/settings/timezone` 设置默认时区，未显式指定
+  时区的触发器按「触发器参数 → 系统默认 → 进程本地时区」解析，容器以 UTC 运行时
+  不再把业务时间算错；系统设置页新增时区选择，cron/interval 触发器表单默认填入
+  并显示该时区。
 
 ## 0.0.1 (2026-08-08)
 

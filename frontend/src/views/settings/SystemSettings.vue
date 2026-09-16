@@ -49,6 +49,54 @@
       <VariablesManager />
     </div>
 
+    <!-- Timezone tab -->
+    <div v-show="activeTab === 'timezone'" class="tab-content">
+      <div class="glass-card" style="padding: var(--space-xl);">
+        <h3 class="section-title">默认时区</h3>
+        <p class="section-desc">
+          新建任务时，Cron / Interval / Date 触发器的默认计算时区。未显式指定时区的任务都会用它，
+          因此容器以 UTC 运行时也不会再把北京时间填成 09:00 UTC。
+        </p>
+        <div class="rate-limit-form">
+          <div class="form-group">
+            <label for="default-timezone">当前默认时区</label>
+            <el-select
+              id="default-timezone"
+              v-model="timezone"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="选择时区"
+              style="width: 100%"
+            >
+              <el-option v-for="tz in timezoneOptions" :key="tz" :label="tz" :value="tz" />
+            </el-select>
+            <span class="field-hint">
+              生效范围：<strong>{{ timezoneConfigured ? '系统设置' : '跟随系统时区' }}</strong>
+              （进程时区 {{ systemTimezone || '-' }}）。
+              已创建任务的时区保存在各自触发器里，不受此处影响。
+            </span>
+          </div>
+          <div class="settings-actions">
+            <el-button
+              :disabled="savingTimezone || !timezoneConfigured"
+              @click="resetTimezone"
+            >
+              跟随系统
+            </el-button>
+            <button
+              type="button"
+              class="btn-primary"
+              :disabled="savingTimezone"
+              @click="saveTimezone"
+            >
+              保存时区
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- API Keys tab -->
     <div v-show="activeTab === 'apikeys'" class="tab-content">
       <ApiKeyManager />
@@ -105,7 +153,14 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
-import { getRateLimit, setRateLimit } from '@/api/settings'
+import {
+  browserTimezones,
+  getRateLimit,
+  getTimezone,
+  setRateLimit,
+  setTimezone,
+} from '@/api/settings'
+import type { TimezoneInfo } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import VariablesManager from './VariablesManager.vue'
 import ApiKeyManager from './ApiKeyManager.vue'
@@ -114,9 +169,15 @@ const settingsStore = useSettingsStore()
 const activeTab = ref('theme')
 const savingRateLimit = ref(false)
 const rateLimit = reactive({ enabled: false, rpm: 120 })
+const savingTimezone = ref(false)
+const timezone = ref('')
+const timezoneConfigured = ref(false)
+const systemTimezone = ref('')
+const timezoneOptions = ref<string[]>([])
 
 const tabs = [
   { key: 'theme', label: '主题设置' },
+  { key: 'timezone', label: '时区设置' },
   { key: 'variables', label: '变量管理' },
   { key: 'apikeys', label: 'API Key' },
   { key: 'rate-limit', label: 'API 写限流' },
@@ -144,9 +205,59 @@ async function saveRateLimit() {
   }
 }
 
+function applyTimezoneInfo(info: TimezoneInfo) {
+  timezone.value = info.timezone
+  timezoneConfigured.value = info.configured
+  systemTimezone.value = info.system_timezone
+  // The server list can be empty on a tzdata-less image; the browser list
+  // keeps the picker usable so users can still type an IANA name.
+  timezoneOptions.value = Array.from(
+    new Set([...info.available, ...browserTimezones(), info.timezone]),
+  ).sort()
+}
+
+async function loadTimezone() {
+  try {
+    applyTimezoneInfo(await getTimezone())
+  } catch {
+    /* keep whatever the user typed */
+  }
+}
+
+async function saveTimezone() {
+  if (!timezone.value) {
+    ElMessage.warning('请选择时区')
+    return
+  }
+  savingTimezone.value = true
+  try {
+    const info = await setTimezone(timezone.value)
+    applyTimezoneInfo(info)
+    ElMessage.success(`默认时区已设为 ${info.timezone}，新建任务将使用该时区`)
+  } catch {
+    ElMessage.error('默认时区保存失败')
+  } finally {
+    savingTimezone.value = false
+  }
+}
+
+async function resetTimezone() {
+  savingTimezone.value = true
+  try {
+    const info = await setTimezone(null)
+    applyTimezoneInfo(info)
+    ElMessage.success(`已恢复为跟随系统时区（${info.system_timezone}）`)
+  } catch {
+    ElMessage.error('恢复系统时区失败')
+  } finally {
+    savingTimezone.value = false
+  }
+}
+
 onMounted(() => {
   settingsStore.fetchTheme()
   loadRateLimit()
+  loadTimezone()
 })
 </script>
 

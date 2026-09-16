@@ -130,7 +130,9 @@ app = create_app(Scheduler(), title="调度器API")
 
 - `/api/jobs`：任务 CRUD、`pause/resume/run`、`/logs`（结构化 REST，`api/rest/`）；
 - `/api/scheduler/status`、`/start`、`/pause`、`/resume`、`/shutdown`；
-- `/api/v1/auth`：登录/初始化/API Key；`/api/v1/settings`：主题/变量；
+- `/api/v1/auth`：登录/初始化/API Key；`/api/v1/settings`：主题/变量/默认时区
+  （`GET/PUT /api/v1/settings/timezone`：未显式指定时区的触发器使用它，否则回落到
+  进程本地时区；见 `api/timezone.py`）；
 - `/api/v1/components`：执行器/存储器/触发器列表与配置、jobstore 迁移、`/jobs/{id}/reschedule`；
 - `/api/v1/sse`：`/jobs/{id}/next-run-time` 实时推送（查 core 调度器）。
 

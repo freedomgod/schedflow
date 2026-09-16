@@ -48,6 +48,50 @@ export interface RateLimitConfig {
   rpm: number
 }
 
+export interface TimezoneInfo {
+  /** Effective default timezone for newly scheduled work. */
+  timezone: string
+  /** Whether the operator picked one, or it follows the system zone. */
+  configured: boolean
+  /** Zone the backend process runs in (container TZ / /etc/localtime). */
+  system_timezone: string
+  /** IANA names known to the server (empty when the image lacks tzdata). */
+  available: string[]
+}
+
+let timezoneInfo: TimezoneInfo | null = null
+
+export async function getTimezone(force = false): Promise<TimezoneInfo> {
+  if (!timezoneInfo || force) {
+    const info: TimezoneInfo = await client.get('/settings/timezone')
+    timezoneInfo = info
+  }
+  return timezoneInfo
+}
+
+export function setTimezone(timezone: string | null): Promise<TimezoneInfo> {
+  const request: Promise<TimezoneInfo> = client.put('/settings/timezone', { timezone })
+  return request.then((info) => {
+    timezoneInfo = info
+    return info
+  })
+}
+
+/** IANA zones the current browser knows about; a superset is fine client-side. */
+export function browserTimezones(): string[] {
+  const supported = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] })
+    .supportedValuesOf
+  if (typeof supported === 'function') {
+    try {
+      return supported('timeZone')
+    } catch {
+      /* fall through to the single local zone */
+    }
+  }
+  const local = Intl.DateTimeFormat().resolvedOptions().timeZone
+  return local ? [local] : []
+}
+
 export function getWebhooks(): Promise<WebhookConfig[]> {
   return client.get('/settings/webhooks')
 }

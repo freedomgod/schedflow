@@ -14,6 +14,7 @@ Models:
         ApiKeyUpdateRequest — API key management models.
     ThemeRequest / ThemeResponse / VariableCreateRequest /
         VariableUpdateRequest / VariableItem — User settings models.
+    TimezoneRequest / TimezoneResponse — System default timezone models.
     JobstoreConfigureRequest / ExecutorConfigureRequest /
         JobstoreUpdateResponse / ExecutorUpdateResponse /
         JobstoreMigrateResponse — Jobstore and executor configuration models.
@@ -178,6 +179,19 @@ class WebhookTestRequest(BaseModel):
 class RateLimitRequest(BaseModel):
     enabled: bool = False
     rpm: int = Field(default=120, ge=1)
+
+
+class TimezoneRequest(BaseModel):
+    """System default timezone; ``None`` restores the process-local zone."""
+
+    timezone: str | None = None
+
+
+class TimezoneResponse(BaseModel):
+    timezone: str
+    configured: bool
+    system_timezone: str
+    available: list[str] = Field(default_factory=list)
 
 
 class VariableItem(BaseModel):

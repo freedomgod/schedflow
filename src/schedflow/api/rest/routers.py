@@ -10,6 +10,7 @@ from schedflow.api.rest.schemas import (
     RunJobRequest,
 )
 from schedflow.api.schemas import APIResponse
+from schedflow.api.timezone import with_default_timezone
 from schedflow.core.jobstore import JobConflictError, JobNotFoundError
 from schedflow.core.metrics import render_prometheus
 from schedflow.core.scheduler import (
@@ -19,6 +20,7 @@ from schedflow.core.scheduler import (
 )
 from schedflow.core.snapshot import DagChangedError, SnapshotNotFoundError
 from schedflow.core.workflow import CycleError
+from schedflow.triggers.base import Trigger
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -39,10 +41,20 @@ def _get_scheduler(request: Request):
     return scheduler
 
 
+def _to_trigger(trigger_in) -> Trigger | None:
+    """Build a trigger, filling in the system default timezone when omitted."""
+    if trigger_in is None:
+        return None
+    payload = with_default_timezone(
+        {"type": trigger_in.type, "args": trigger_in.args}
+    )
+    return Trigger.from_dict(payload)
+
+
 def _build_workflow_and_trigger(request):
     try:
         workflow = request.workflow.to_workflow()
-        trigger = request.trigger.to_trigger() if request.trigger is not None else None
+        trigger = _to_trigger(request.trigger)
     except (ValueError, CycleError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return workflow, trigger
@@ -96,9 +108,10 @@ def update_job(
     workflow = (
         request.workflow.to_workflow() if request.workflow is not None else None
     )
-    trigger = (
-        request.trigger.to_trigger() if request.trigger is not None else None
-    )
+    try:
+        trigger = _to_trigger(request.trigger)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     changes = request.model_dump(
         exclude_none=True, exclude={"workflow", "trigger"}
     )
@@ -176,7 +189,7 @@ def reschedule_job(
     scheduler=Depends(_get_scheduler),
 ):
     try:
-        trigger = request.trigger.to_trigger()
+        trigger = _to_trigger(request.trigger)
         job = scheduler.reschedule_job(job_id, trigger)
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

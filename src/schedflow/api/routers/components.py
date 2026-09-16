@@ -10,6 +10,7 @@ from schedflow.api.schemas import (
     JobstoreUpdateResponse,
     RescheduleRequest,
 )
+from schedflow.api.timezone import with_default_timezone
 from schedflow.configs.config import (
     get_jobstore_config,
     load_executor_configs,
@@ -67,7 +68,10 @@ def list_jobstores(scheduler: Scheduler = Depends(get_core_scheduler)):
 
 @router.post("/jobs/{job_id}/reschedule")
 def reschedule_job(job_id: str, request: RescheduleRequest, scheduler: Scheduler = Depends(get_core_scheduler)):
-    trigger = Trigger.from_dict({"type": request.trigger, "args": request.trigger_args or {}})
+    payload = with_default_timezone(
+        {"type": request.trigger, "args": request.trigger_args or {}}
+    )
+    trigger = Trigger.from_dict(payload)
     job = scheduler.reschedule_job(job_id, trigger)
     return APIResponse(data={
         "id": job.job_id,

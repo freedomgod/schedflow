@@ -1,19 +1,24 @@
 import sqlite3
 import uuid
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from schedflow.api.deps import get_core_scheduler
 from schedflow.api.schemas import (
     APIResponse,
     RateLimitRequest,
     ThemeRequest,
     ThemeResponse,
+    TimezoneRequest,
+    TimezoneResponse,
     VariableCreateRequest,
     VariableItem,
     VariableUpdateRequest,
     WebhooksRequest,
     WebhookTestRequest,
 )
+from schedflow.api.timezone import apply_scheduler_timezone
+from schedflow.core.scheduler import Scheduler
 from schedflow.settings.models import (
     create_variable,
     delete_variable,
@@ -21,11 +26,16 @@ from schedflow.settings.models import (
     update_variable,
 )
 from schedflow.settings.services import (
+    get_configured_timezone,
+    get_default_timezone,
     get_rate_limit_config,
+    get_system_timezone,
     get_theme,
     get_webhooks_config,
+    list_timezones,
     set_rate_limit_config,
     set_theme,
+    set_timezone,
     set_webhooks_config,
 )
 
@@ -43,6 +53,38 @@ def theme_get():
 def theme_set(request: ThemeRequest):
     set_theme(request.theme)
     return APIResponse(message="Theme updated")
+
+
+# ── Timezone ──────────────────────────────────────────
+
+def _timezone_payload() -> dict:
+    configured = get_configured_timezone()
+    return TimezoneResponse(
+        timezone=get_default_timezone(),
+        configured=configured is not None,
+        system_timezone=get_system_timezone(),
+        available=list_timezones(),
+    ).model_dump()
+
+
+@router.get("/timezone")
+def timezone_get():
+    """Effective default timezone, whether it is configured, and the options."""
+    return APIResponse(data=_timezone_payload())
+
+
+@router.put("/timezone")
+def timezone_set(
+    request: TimezoneRequest,
+    scheduler: Scheduler = Depends(get_core_scheduler),
+):
+    """Set the default timezone for newly scheduled work (``null`` clears it)."""
+    try:
+        set_timezone(request.timezone)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    apply_scheduler_timezone(scheduler)
+    return APIResponse(data=_timezone_payload())
 
 
 # ── Variables ─────────────────────────────────────────

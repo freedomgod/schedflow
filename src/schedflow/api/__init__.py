@@ -18,6 +18,11 @@ from schedflow.core.scheduler import STATE_STOPPED, Scheduler
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     scheduler = app.state.scheduler
+    # Bring the scheduler in line with the operator-configured timezone
+    # before anything is armed or executed.
+    from schedflow.api.timezone import apply_scheduler_timezone
+
+    apply_scheduler_timezone(scheduler)
     # Restore previously persisted jobstores/executors before starting.
     restore_component_configs(scheduler)
     if scheduler.state == STATE_STOPPED:

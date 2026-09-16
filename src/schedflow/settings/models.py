@@ -29,6 +29,16 @@ def set_setting(key: str, value: str) -> None:
         conn.close()
 
 
+def delete_setting(key: str) -> None:
+    """Remove a system setting so lookups fall back to their default."""
+    conn = _get_conn()
+    try:
+        conn.execute("DELETE FROM system_settings WHERE key = ?", (key,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # ── Variables ─────────────────────────────────────────
 
 def list_variables() -> list[dict]:
