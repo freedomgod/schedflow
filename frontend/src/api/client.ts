@@ -2,6 +2,19 @@ import axios from 'axios'
 import type { AxiosInstance, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 
+import { expireSession } from '@/utils/session'
+
+/**
+ * Endpoints that verify credentials. Their 401 means "wrong password", not an
+ * expired session, so they must not trigger the logout flow.
+ */
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/init-status', '/auth/init-setup']
+
+function isAuthEndpoint(url: string | undefined): boolean {
+  if (!url) return false
+  return AUTH_ENDPOINTS.some((path) => url.endsWith(path))
+}
+
 function createClient(baseURL: string): AxiosInstance {
   const instance: AxiosInstance = axios.create({
     baseURL,
@@ -27,17 +40,15 @@ function createClient(baseURL: string): AxiosInstance {
       return data
     },
     (error: AxiosError<{ detail?: unknown; message?: string }>) => {
-      if (error.response?.status === 403) {
-        const router = (window as any).__router
-        if (router) {
-          const currentRoute = router.currentRoute?.value
-          if (!currentRoute?.meta?.public) {
-            localStorage.removeItem('schedflow_token')
-            localStorage.removeItem('schedflow_user')
-            router.push('/login')
-          }
-        }
+      const status = error.response?.status
+      if ((status === 401 || status === 403) && !isAuthEndpoint(error.config?.url)) {
+        // The session handler clears auth state, redirects to /login and shows
+        // one readable notice. Reject quietly so the backend's raw
+        // "Forbidden: invalid or missing credentials" never reaches the user.
+        expireSession()
+        return Promise.reject(error)
       }
+
       const data = error.response?.data
       let msg: string
       if (data?.detail) {

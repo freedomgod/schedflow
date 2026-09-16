@@ -74,7 +74,13 @@
             <td class="cell-time">{{ job.next_run_time ? formatTime(job.next_run_time) : '-' }}</td>
             <td class="cell-actions">
               <button class="action-btn" @click="$router.push(`/jobs/${job.id}`)">详情</button>
-              <button v-if="job.job_status !== 'COMPLETED'" class="action-btn" @click="handleCancel(job.id)">取消</button>
+              <button
+                class="action-btn"
+                :disabled="runningJobs.has(job.id)"
+                @click="handleRun(job.id)"
+              >
+                {{ runningJobs.has(job.id) ? '执行中…' : '执行' }}
+              </button>
               <button class="action-btn" @click="handleCopy(job.id)">复制</button>
               <button class="action-btn danger" @click="handleDelete(job.id)">删除</button>
             </td>
@@ -103,7 +109,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  getJobs, getJob, createJob, deleteJob, pauseJob, resumeJob, cancelJob,
+  getJobs, getJob, createJob, deleteJob, pauseJob, resumeJob, runJob,
   connectAllJobsNextRunTimeSSE,
 } from '@/api/jobs'
 import type { Job, JobCreateParams } from '@/types'
@@ -118,6 +124,7 @@ const executorFilter = ref('')
 const jobstoreFilter = ref('')
 const dialogVisible = ref(false)
 const togglingStatus = ref(new Set<string>())
+const runningJobs = ref(new Set<string>())
 const jobFormRef = ref<InstanceType<typeof JobForm>>()
 let sseCleanup: (() => void) | null = null
 
@@ -196,14 +203,24 @@ async function handleDelete(id: string) {
   useSchedulerStore().fetchStatus(true)
 }
 
-async function handleCancel(id: string) {
+async function handleRun(id: string) {
+  runningJobs.value.add(id)
   try {
-    await cancelJob(id)
-    ElMessage.success('已发起取消')
+    // The run endpoint executes the workflow synchronously, so the request
+    // only returns once the DAG finished.
+    const log = (await runJob(id, { mode: 'full' })) as { succeeded?: boolean } | undefined
+    if (log && log.succeeded === false) {
+      ElMessage.warning('执行完成，但存在失败节点，请查看任务日志')
+    } else {
+      ElMessage.success('执行完成，可到任务日志查看明细')
+    }
   } catch {
-    ElMessage.warning('任务未在运行，无法取消')
+    ElMessage.error('执行失败')
+  } finally {
+    runningJobs.value.delete(id)
+    await fetchJobs(true)
+    useSchedulerStore().fetchStatus(true)
   }
-  await fetchJobs(true)
 }
 
 function applyNextRunSnapshot(snapshot: Record<string, string | null>) {

@@ -57,10 +57,12 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { consumeRedirect, sanitizeRedirect } from '@/utils/session'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const loading = ref(false)
 const errorMsg = ref('')
@@ -75,7 +77,11 @@ async function handleLogin() {
   loading.value = true
   try {
     await authStore.login(form.username, form.password)
-    router.push('/dashboard')
+    const target =
+      sanitizeRedirect(route.query.redirect) ||
+      sanitizeRedirect(consumeRedirect()) ||
+      '/dashboard'
+    router.push(target)
   } catch (e: any) {
     errorMsg.value = e?.message || '登录失败'
   } finally {

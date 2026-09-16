@@ -13,9 +13,9 @@
         {{ log.start_time ? new Date(log.start_time).toLocaleString() : '-' }}
       </div>
       <div class="execution-id">{{ log.flow_log_id }}</div>
-      <div v-if="log.mode" class="execution-mode">
-        {{ log.mode === 'resume' ? '恢复执行' : '全量执行' }}
-        <span v-if="log.resumes_from"> ← {{ log.resumes_from }}</span>
+      <div v-if="log.mode === 'resume' && log.resumes_from" class="execution-mode">
+        <span class="resume-tag">续跑</span>
+        <span class="resume-from">← {{ log.resumes_from }}</span>
       </div>
       <div class="execution-summary">
         <span class="summary-item success">{{ succeededCount(log) }} 成功</span>
@@ -108,6 +108,26 @@ function skippedCount(log: ExecutionLog): number {
   font-size: 11px;
   color: var(--el-text-color-secondary);
   margin-top: 2px;
+}
+
+.execution-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.resume-tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--el-color-warning, #e6a23c);
+  background: rgba(230, 162, 60, 0.12);
+}
+
+.resume-from {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
 }
 
 .execution-summary {

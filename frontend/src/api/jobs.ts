@@ -42,11 +42,27 @@ export function cancelJob(id: string): Promise<Job> {
   )
 }
 
+export interface JobRun {
+  execution_id: string
+  mode: string
+  resumes_from: string | null
+  /** Snapshot status: `running` while the execution is in flight. */
+  status: string
+  started_at: string
+  ended_at: string | null
+}
+
+export function getJobRuns(id: string): Promise<JobRun[]> {
+  return schedulerClient.get(`/jobs/${id}/runs`) as Promise<JobRun[]>
+}
+
 export function runJob(
   id: string,
   params: { mode?: 'full' | 'resume'; timeout?: number } = {},
 ): Promise<unknown> {
-  return schedulerClient.post(`/jobs/${id}/run`, params)
+  // A manual run executes the whole DAG server-side before responding, which
+  // can take far longer than the client's default 10s request timeout.
+  return schedulerClient.post(`/jobs/${id}/run`, params, { timeout: 0 })
 }
 
 /**

@@ -20,7 +20,7 @@ Models:
         JobstoreMigrateResponse — Jobstore and executor configuration models.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -163,6 +163,8 @@ class WebhookConfigItem(BaseModel):
     events: list[str] = Field(default_factory=lambda: ["*"])
     secret: str | None = None
     timeout: float | None = Field(default=None, gt=0)
+    #: Delivery target; decides the request envelope and signing.
+    platform: Literal["generic", "dingtalk", "wecom", "feishu"] = "generic"
 
 
 class WebhooksRequest(BaseModel):
@@ -174,6 +176,7 @@ class WebhookTestRequest(BaseModel):
     events: list[str] | None = None
     secret: str | None = None
     timeout: float | None = Field(default=None, gt=0)
+    platform: Literal["generic", "dingtalk", "wecom", "feishu"] | None = None
 
 
 class RateLimitRequest(BaseModel):

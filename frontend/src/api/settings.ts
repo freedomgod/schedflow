@@ -41,6 +41,8 @@ export interface WebhookConfig {
   url: string
   events: string[]
   secret?: string | null
+  /** Delivery target: generic | dingtalk | wecom | feishu. */
+  platform?: string
 }
 
 export interface RateLimitConfig {
@@ -113,12 +115,19 @@ export interface WebhookTestResult {
   status_code: number | null
   error: string | null
   duration_ms: number
+  platform?: string
+  /** Raw response body from the target, for diagnosing platform rejections. */
+  response?: string | null
 }
 
-export function testWebhookDelivery(params: {
+export interface WebhookTestParams {
   url: string
   events?: string[]
   secret?: string
-}): Promise<WebhookTestResult> {
+  timeout?: number
+  platform?: string
+}
+
+export function testWebhookDelivery(params: WebhookTestParams): Promise<WebhookTestResult> {
   return client.post('/settings/webhooks/test', params)
 }

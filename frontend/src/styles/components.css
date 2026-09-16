@@ -79,6 +79,15 @@
   border-color: rgba(239, 68, 68, 0.3);
 }
 
+.action-btn:disabled,
+.action-btn:disabled:hover {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+}
+
 .form-group {
   display: flex;
   flex-direction: column;

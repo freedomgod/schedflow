@@ -7,6 +7,7 @@ handlers cover:
 Status code mapping:
     404 — JobNotFoundError
     409 — JobConflictError, ValueError
+    422 — TriggerError (invalid trigger configuration)
     400 — LookupError
     500 — Unhandled exceptions (catch-all)
     502 — OSError (connection refused, timeout, DNS resolution)
@@ -20,6 +21,7 @@ from fastapi.responses import JSONResponse
 
 from schedflow.api.schemas import APIResponse
 from schedflow.core.jobstore import JobConflictError, JobNotFoundError
+from schedflow.exceptions.triggers import TriggerError
 
 
 def register_exception_handlers(app: FastAPI):
@@ -48,6 +50,14 @@ def register_exception_handlers(app: FastAPI):
     async def lookup_error_handler(request: Request, exc: LookupError):
         return JSONResponse(
             status_code=400,
+            content=APIResponse(code=-1, message=str(exc)).model_dump(),
+        )
+
+    @app.exception_handler(TriggerError)
+    async def trigger_error_handler(request: Request, exc: TriggerError):
+        """Invalid trigger configuration is a client error, not a server one."""
+        return JSONResponse(
+            status_code=422,
             content=APIResponse(code=-1, message=str(exc)).model_dump(),
         )
 

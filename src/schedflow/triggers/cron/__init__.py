@@ -20,6 +20,21 @@ from schedflow.utils import (
     datetime_repr,
 )
 
+#: Fields a caller can set on a cron trigger. Setting none of them makes the
+#: expression match every second; the web API rejects such payloads (see
+#: ``api/triggers.py``) while the trigger itself keeps the documented
+#: APScheduler-style semantics for programmatic callers.
+CRON_FIELD_NAMES = (
+    "year",
+    "month",
+    "day",
+    "week",
+    "day_of_week",
+    "hour",
+    "minute",
+    "second",
+)
+
 
 class CronTriggerModel(TriggerBaseConfigModel):
     year: int | str | None = Field(default=None, description="4位数字格式的年份")
@@ -98,16 +113,7 @@ class CronTrigger(BaseTrigger):
     .. note:: The first weekday is always **monday**.
     """
 
-    FIELD_NAMES = (
-        "year",
-        "month",
-        "day",
-        "week",
-        "day_of_week",
-        "hour",
-        "minute",
-        "second",
-    )
+    FIELD_NAMES = CRON_FIELD_NAMES
     FIELDS_MAP: ClassVar[dict[str, type[BaseField]]] = {
         "year": BaseField,
         "month": MonthField,

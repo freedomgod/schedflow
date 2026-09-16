@@ -95,6 +95,10 @@ docs/                 Sphinx/mkdocs 文档
 - `JobStore` 接口 + `MemoryJobStore`；持久化实现：`SQLAlchemyJobStore` / `RedisJobStore` / `MongoDBJobStore`（`core/stores/`）；
 - 组件配置（执行器/存储器）持久化在 SQLite 元数据库（`configs/config.py`），应用启动时由 lifespan 恢复；
 - `/api/v1/components` 提供插件列表、配置、更新、删除与 **jobstore 迁移**（`Scheduler.migrate_jobstore(source, target)`）。
+- Webhook 通知（`api/routers/settings.py` + `core/webhook.py`）支持
+  `generic|dingtalk|wecom|feishu` 四种平台：报文与签名在 `build_request_body()` /
+  `sign_url()` 中按平台生成，平台以 `HTTP 200 + errcode/code` 表示的拒收由
+  `platform_error()` 识别为投递失败；新增平台时同步更新前端集成页的 `PLATFORMS`。
 
 ## 7. 组件注册（静态注册表，无 entry-points）
 

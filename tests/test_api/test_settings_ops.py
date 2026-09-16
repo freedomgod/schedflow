@@ -52,6 +52,7 @@ def test_webhook_and_rate_limit_settings_roundtrip():
                     "url": "http://example.test/hook",
                     "events": ["job.*"],
                     "secret": "s",
+                    "platform": "generic",
                 }
             ]
     finally:
@@ -65,6 +66,70 @@ def test_webhook_test_endpoint_requires_a_target():
         response = client.post("/api/v1/settings/webhooks/test", json={})
 
     assert response.status_code == 422
+
+
+def test_webhook_platform_is_persisted_and_validated():
+    try:
+        with _client() as client:
+            resp = client.put(
+                "/api/v1/settings/webhooks",
+                json={
+                    "webhooks": [
+                        {
+                            "url": "https://example.test/hook",
+                            "events": ["job.failed"],
+                            "platform": "dingtalk",
+                        }
+                    ]
+                },
+            )
+            assert resp.status_code == 200, resp.text
+            assert get_webhooks_config()[0]["platform"] == "dingtalk"
+
+            unknown = client.put(
+                "/api/v1/settings/webhooks",
+                json={
+                    "webhooks": [
+                        {"url": "https://example.test/hook", "platform": "slack"}
+                    ]
+                },
+            )
+            assert unknown.status_code == 422, unknown.text
+    finally:
+        set_webhooks_config([])
+
+
+def test_webhook_test_endpoint_forwards_the_platform(monkeypatch):
+    import schedflow.core.webhook as webhook_module
+
+    calls: dict = {}
+
+    def fake_deliver_once(config, payload):
+        calls["platform"] = config.platform
+        return {
+            "ok": True,
+            "status_code": 200,
+            "error": None,
+            "duration_ms": 1.0,
+            "platform": config.platform,
+            "response": '{"errcode":0}',
+        }
+
+    monkeypatch.setattr(webhook_module, "deliver_once", fake_deliver_once)
+
+    with _client() as client:
+        response = client.post(
+            "/api/v1/settings/webhooks/test",
+            json={
+                "url": "https://example.test/hook",
+                "platform": "feishu",
+                "secret": "s",
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    assert calls["platform"] == "feishu"
+    assert response.json()["data"]["platform"] == "feishu"
 
 
 def test_webhook_test_endpoint_reports_delivery_result(monkeypatch):

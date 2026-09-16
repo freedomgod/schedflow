@@ -11,6 +11,7 @@ from schedflow.api.rest.schemas import (
 )
 from schedflow.api.schemas import APIResponse
 from schedflow.api.timezone import with_default_timezone
+from schedflow.api.trigger_validation import ensure_schedulable
 from schedflow.core.jobstore import JobConflictError, JobNotFoundError
 from schedflow.core.metrics import render_prometheus
 from schedflow.core.scheduler import (
@@ -42,11 +43,15 @@ def _get_scheduler(request: Request):
 
 
 def _to_trigger(trigger_in) -> Trigger | None:
-    """Build a trigger, filling in the system default timezone when omitted."""
+    """Build a trigger from a request payload.
+
+    Fills in the system default timezone when omitted and rejects payloads
+    that would fire continuously (see ``api/trigger_validation.py``).
+    """
     if trigger_in is None:
         return None
-    payload = with_default_timezone(
-        {"type": trigger_in.type, "args": trigger_in.args}
+    payload = ensure_schedulable(
+        with_default_timezone({"type": trigger_in.type, "args": trigger_in.args})
     )
     return Trigger.from_dict(payload)
 

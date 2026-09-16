@@ -448,8 +448,12 @@ bus.unsubscribe("job.failed", callback)
   耗时、队列深度、listener/主循环错误计数；
 - **SSE 执行事件**：`GET /api/v1/sse/jobs/{job_id}/events` 推送
   `job.*` 与 `task.*` 事件，连接时回放最近一次运行摘要；
-- **Webhook**：`PUT /api/v1/settings/webhooks` 配置 `url/events/secret`，以有界队列 +
-  有限重试投递；失败不会阻塞调度；
+- **Webhook**：`PUT /api/v1/settings/webhooks` 配置 `url/events/secret/platform`，以有界队列 +
+  有限重试投递；失败不会阻塞调度。`platform` 决定报文格式：
+  `generic`（原始 JSON，密钥走 `X-SchedFlow-Secret` 头）、`dingtalk`（markdown 报文，
+  密钥用于加签）、`wecom`（markdown 报文，不支持签名）、`feishu`（text 报文，
+  密钥用于签名校验）。平台以 `HTTP 200 + errcode/code` 表达失败时同样会被判定为投递失败，
+  原因写入日志并回显在 `POST /api/v1/settings/webhooks/test`；
 - **API 限流**：`PUT /api/v1/settings/rate-limit`（`enabled/rpm`）对写请求启用进程内
   token bucket，超限返回 429 + `Retry-After`；
 - **结构化日志**：`SCHEDFLOW_LOG_FORMAT=json` 输出带

@@ -11,6 +11,7 @@ from schedflow.api.schemas import (
     RescheduleRequest,
 )
 from schedflow.api.timezone import with_default_timezone
+from schedflow.api.trigger_validation import ensure_schedulable
 from schedflow.configs.config import (
     get_jobstore_config,
     load_executor_configs,
@@ -71,7 +72,7 @@ def reschedule_job(job_id: str, request: RescheduleRequest, scheduler: Scheduler
     payload = with_default_timezone(
         {"type": request.trigger, "args": request.trigger_args or {}}
     )
-    trigger = Trigger.from_dict(payload)
+    trigger = Trigger.from_dict(ensure_schedulable(payload))
     job = scheduler.reschedule_job(job_id, trigger)
     return APIResponse(data={
         "id": job.job_id,

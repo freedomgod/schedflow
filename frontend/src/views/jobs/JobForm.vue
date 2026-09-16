@@ -166,6 +166,13 @@ async function handleSubmit() {
   if (!form.executor) { formError.value = '请选择执行器'; return }
   if (!form.jobstore) { formError.value = '请选择存储后端'; return }
 
+  const triggerError = triggerConfigRef.value?.validate()
+  if (triggerError) {
+    formError.value = triggerError
+    activeTab.value = 'trigger'
+    return
+  }
+
   const finalTriggerArgs = triggerConfigRef.value?.getTriggerArgs()
   const dagData = workflowEditorRef.value?.getDagData()
 

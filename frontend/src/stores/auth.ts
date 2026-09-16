@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { getInitStatus, initSetup, login as apiLogin } from '@/api/auth'
 import type { AuthResult } from '@/api/auth'
 import { ElMessage } from 'element-plus'
+import { resetSessionState } from '@/utils/session'
 
 const TOKEN_KEY = 'schedflow_token'
 const USER_KEY = 'schedflow_user'
@@ -20,6 +21,8 @@ export const useAuthStore = defineStore('auth', () => {
     username.value = result.username
     localStorage.setItem(TOKEN_KEY, result.token)
     localStorage.setItem(USER_KEY, result.username)
+    // A fresh session: allow the expiry handler to run again later.
+    resetSessionState()
   }
 
   function clearAuth() {
@@ -60,7 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
-    token, username, needInit, initChecked, isAuthenticated,
+    token, username, needInit, initChecked, isAuthenticated, clearAuth,
     checkInitStatus, doInitSetup, login, logout,
   }
 })

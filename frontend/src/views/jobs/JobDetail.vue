@@ -49,8 +49,15 @@
             <div class="info-row">
               <dt>执行</dt>
               <dd class="detail-run-actions">
-                <button class="action-btn" :disabled="runningAction" @click="handleRun('full')">全量执行</button>
-                <button class="action-btn" :disabled="runningAction" @click="handleRun('resume')">恢复执行</button>
+                <button
+                  class="action-btn"
+                  :disabled="!hasRunningRun || cancellingRun"
+                  :title="hasRunningRun ? '请求停止当前执行' : '当前没有正在执行的运行'"
+                  @click="handleCancelRun"
+                >
+                  {{ cancellingRun ? '取消中…' : '取消当前执行' }}
+                </button>
+                <span class="run-state">{{ runStateText }}</span>
               </dd>
             </div>
           </dl>
@@ -163,7 +170,14 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getJob, updateJob, runJob, connectNextRunTimeSSE } from '@/api/jobs'
+import {
+  cancelJob,
+  connectNextRunTimeSSE,
+  getJob,
+  getJobRuns,
+  updateJob,
+} from '@/api/jobs'
+import type { JobRun } from '@/api/jobs'
 import { normalizeTriggerType } from '@/api/mappers'
 import type { Job } from '@/types'
 import type { DagData, TaskNodeProperties } from '@/types/workflow'
@@ -184,8 +198,9 @@ const isConfigEditing = ref(false)
 const sseNextRunTime = ref<string | null>(null)
 const lastJobEvent = ref<string | null>(null)
 let jobSseCleanup: (() => void) | null = null
-const runningAction = ref(false)
 const sseHasUpdate = ref(false)
+const jobRuns = ref<JobRun[]>([])
+const cancellingRun = ref(false)
 const viewWorkflowEditorRef = ref<InstanceType<typeof WorkflowEditor> | null>(null)
 const editWorkflowEditorRef = ref<InstanceType<typeof WorkflowEditor> | null>(null)
 const infoSidebarVisible = ref(false)
@@ -220,6 +235,17 @@ const displayNextRunTime = computed(() => {
     ? sseNextRunTime.value
     : (job.value?.next_run_time ?? null)
   return val ? new Date(val).toLocaleString() : '-'
+})
+
+const hasRunningRun = computed(() =>
+  jobRuns.value.some((run) => run.status === 'running'),
+)
+
+const runStateText = computed(() => {
+  if (hasRunningRun.value) return '有执行正在进行'
+  const last = jobRuns.value[0]
+  if (!last) return '暂无执行记录'
+  return last.ended_at ? `上次执行 ${new Date(last.started_at).toLocaleString()}` : ''
 })
 
 function statusType(s: string) {
@@ -269,6 +295,12 @@ function cancelConfigEdit() {
 
 async function handleSaveConfig() {
   if (!job.value) return
+  const triggerError = triggerConfigRef.value?.validate()
+  if (triggerError) {
+    editActiveTab.value = 'trigger'
+    ElMessage.warning(triggerError)
+    return
+  }
   savingConfig.value = true
   try {
     await updateJob(job.value.id, {
@@ -295,6 +327,10 @@ function startSSE() {
       if (event.kind.startsWith('task.')) {
         void fetchJob()
       }
+      if (event.kind.startsWith('job.')) {
+        // Run state drives the cancel button: refresh when a run starts/ends.
+        void fetchRuns()
+      }
     },
     (error) => console.warn('Job SSE error:', error),
   )
@@ -306,27 +342,32 @@ function stopSSE() {
 
 async function showExecutorConfig(name: string) { executorDialogTitle.value = `执行器配置 — ${name}`; executorDialogVisible.value = true; try { const c = await getExecutorConfigs(); const f = c.find((x: ComponentConfig) => x.name === name); executorFields.value = f ? Object.entries(f.config || {}).map(([k, v]) => ({ label: k, value: v })) : [] } catch { executorFields.value = [] } }
 
-async function handleRun(mode: 'full' | 'resume') {
-  if (!job.value) return
-  runningAction.value = true
+async function fetchRuns() {
   try {
-    await runJob(job.value.id, { mode })
-    ElMessage.success(mode === 'resume' ? '已发起恢复执行' : '已发起全量执行')
+    jobRuns.value = await getJobRuns(route.params.id as string)
   } catch {
-    ElMessage.error(
-      mode === 'resume'
-        ? '恢复失败：无可用快照或 DAG 已变更'
-        : '执行失败',
-    )
+    jobRuns.value = []
+  }
+}
+
+async function handleCancelRun() {
+  if (!job.value || !hasRunningRun.value) return
+  cancellingRun.value = true
+  try {
+    await cancelJob(job.value.id)
+    ElMessage.success('已请求取消，运行中的节点会在边界处停止')
+  } catch {
+    ElMessage.warning('取消失败，该执行可能已经结束')
   } finally {
-    runningAction.value = false
+    cancellingRun.value = false
+    await fetchRuns()
   }
 }
 async function showJobstoreConfig(alias: string) { jobstoreDialogTitle.value = `存储后端配置 — ${alias}`; jobstoreDialogVisible.value = true; try { const d: JobstoreDetailConfig = await getJobstoreConfig(alias); jobstoreFields.value = Object.entries(d.config || {}).map(([k, v]) => ({ label: k, value: v })) } catch { jobstoreFields.value = [] } }
 function showTriggerConfig() { if (!job.value) return; triggerDialogTitle.value = `触发器配置 — ${job.value.trigger || '-'}`; triggerDialogVisible.value = true; const a = job.value.trigger_args; triggerFields.value = a && Object.keys(a).length > 0 ? Object.entries(a).map(([k, v]) => ({ label: k, value: v })) : [] }
 function renderMarkdown(text: string | undefined | null): string { if (!text) return ''; return marked(text) as string }
 
-onMounted(() => { fetchJob(); startSSE() })
+onMounted(() => { fetchJob(); void fetchRuns(); startSSE() })
 onBeforeUnmount(() => { stopSSE() })
 </script>
 
@@ -409,6 +450,9 @@ select.form-input { cursor: pointer; }
 .desc-editor-toolbar { display: flex; gap: 4px; margin-bottom: 8px; }
 .mode-btn { padding: 4px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-surface); color: var(--text-muted); font-size: 12px; font-family: var(--font-body); cursor: pointer; transition: all var(--transition-fast); }
 .mode-btn.active { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary); }
+
+.detail-run-actions { display: flex; align-items: center; gap: 10px; }
+.run-state { font-size: 12px; color: var(--text-muted); }
 .desc-preview { border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 12px; min-height: 100px; background: var(--bg-surface); }
 
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }

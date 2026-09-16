@@ -224,6 +224,13 @@ def test_cron_bad_kwarg(timezone):
         CronTrigger(start_date="not-a-date", timezone=timezone)
 
 
+def test_cron_every_second_must_be_explicit(timezone):
+    """An all-``*`` cron stays expressible, but only on purpose."""
+    trigger = CronTrigger(second="*", timezone=timezone)
+
+    assert str(trigger) == "cron[second='*']"
+
+
 def test_month_rollover(timezone):
     trigger = CronTrigger(timezone=timezone, day=30)
     now = localize(datetime(2016, 2, 1), timezone)

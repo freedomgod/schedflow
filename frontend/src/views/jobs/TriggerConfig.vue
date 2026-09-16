@@ -284,6 +284,35 @@ function isNotEmpty(val: unknown): boolean {
   return val !== '' && val !== undefined && val !== null
 }
 
+const CRON_FIELDS = [
+  'year', 'month', 'day', 'week', 'day_of_week', 'hour', 'minute', 'second',
+] as const
+
+/**
+ * Guard against schedules that would fire continuously: an empty cron matches
+ * every second and a zero interval always resolves to "now". Returns a message
+ * for the caller to show, or null when the trigger is usable.
+ */
+function validate(): string | null {
+  if (isJsonFallback.value) return null
+
+  if (props.triggerType === 'cron') {
+    if (!CRON_FIELDS.some((field) => isNotEmpty(localArgs[field]))) {
+      return '请至少填写一个 Cron 时间字段（年/月/日/周/星期几/时/分/秒），否则任务会每秒执行'
+    }
+  } else if (props.triggerType === 'interval') {
+    const total =
+      (localArgs.weeks || 0) + (localArgs.days || 0) + (localArgs.hours || 0) +
+      (localArgs.minutes || 0) + (localArgs.seconds || 0)
+    if (total <= 0) {
+      return '请至少设置一个大于 0 的间隔（周/天/时/分/秒），否则任务会连续触发'
+    }
+  } else if (props.triggerType === 'date' && !localArgs.run_date) {
+    return '请选择运行时间'
+  }
+  return null
+}
+
 function buildArgs(): Record<string, unknown> {
   if (isJsonFallback.value) {
     if (jsonText.value.trim()) {
@@ -412,6 +441,7 @@ function setTriggerArgs(args: Record<string, unknown>) {
 defineExpose({
   getTriggerArgs: buildArgs,
   setTriggerArgs,
+  validate,
 })
 </script>
 

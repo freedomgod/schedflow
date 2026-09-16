@@ -124,7 +124,7 @@ export function setupRouterGuard(pinia: Pinia) {
     }
 
     if (!authStore.isAuthenticated) {
-      next('/login')
+      next({ path: '/login', query: { redirect: to.fullPath } })
       return
     }
 
