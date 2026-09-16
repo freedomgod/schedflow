@@ -45,6 +45,12 @@ node_modules/
 tasks/
 design-system/
 
+# Local working documents: agent design notes / implementation plans and
+# generated diagrams. Kept on disk for reference, never part of the published
+# documentation or of what users are meant to read.
+/docs/superpowers/
+/docs/diagrams/
+
 # Generated assets at the repository root
 /*.png
 /*.jpg

@@ -8,6 +8,7 @@ copyright: Copyright &copy; 2025 SchedFlow Contributors
 
 exclude_docs: |
   superpowers/
+  diagrams/
 
 theme:
   name: material

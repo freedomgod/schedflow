@@ -38,7 +38,8 @@ src/schedflow/
 
 examples/             推荐从这里理解 API（quick_start_guide / basic_workflow_example / advanced_workflow_example）
 tests/                单元/集成测试：tests/core、tests/test_api_rest、tests/test_api、tests/triggers
-docs/                 Sphinx/mkdocs 文档
+docs/                 Sphinx/mkdocs 文档（`docs/superpowers/` 设计与实施笔记、
+                      `docs/diagrams/` 生成图均为本地工作文件，已被 .gitignore 忽略、不追踪）
 ```
 
 ## 3. 核心概念（面向使用者）
