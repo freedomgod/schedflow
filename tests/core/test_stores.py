@@ -472,6 +472,12 @@ def test_redis_jobstore_forwards_credentials(monkeypatch):
         password="s3cret",
     )
 
+    # redis-py's default retry would turn one refused connection into ~15s of
+    # blocking; the jobstore must fail fast instead.
+    retry = captured.pop("retry")
+    assert retry is not None
+    assert retry.get_retries() == 0
+
     assert captured == {
         "host": "redis.internal",
         "port": 6380,

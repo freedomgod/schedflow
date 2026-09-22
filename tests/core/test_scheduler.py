@@ -439,6 +439,120 @@ def test_loop_error_publishes_scheduler_error_event():
     assert "loop boom" in seen[0].detail["message"]
 
 
+class _UnreachableJobStore(MemoryJobStore):
+    """Memory store that behaves like a backend which is down."""
+
+    def get_next_run_time(self):
+        raise ConnectionError("backend down")
+
+    def get_due(self, now):
+        raise ConnectionError("backend down")
+
+
+def test_unreachable_jobstore_does_not_kill_scheduler_loop():
+    """A dead backend is skipped and reported, not fatal to the loop thread."""
+    scheduler = make_scheduler()
+    scheduler.state = 1  # STATE_RUNNING
+    seen = []
+    scheduler.on("scheduler.error", seen.append)
+    dead = _UnreachableJobStore()
+    scheduler._jobstores["dead"] = dead
+
+    scheduler._main_loop_iteration_for_test()  # must not raise
+
+    assert scheduler._guarded("dead", dead.get_next_run_time) is None
+    assert seen, "the failure must be published as scheduler.error"
+    assert "backend down" in seen[0].detail["message"]
+
+
+def test_unreachable_jobstore_does_not_block_other_stores():
+    """Jobs in healthy stores keep running while another store is down."""
+    scheduler = make_scheduler()
+    scheduler._jobstores["dead"] = _UnreachableJobStore()
+    scheduler.add_job(
+        make_workflow(), trigger=IntervalTrigger(seconds=1), job_id="j1"
+    )
+    scheduler.start()
+    try:
+        deadline = time.time() + 5
+        while not scheduler.get_job_logs("j1") and time.time() < deadline:
+            time.sleep(0.05)
+        logs = scheduler.get_job_logs("j1")
+        assert logs and logs[0].succeeded
+        assert scheduler._thread is not None
+        assert scheduler._thread.is_alive()
+    finally:
+        scheduler.shutdown()
+
+
+def test_start_survives_unreachable_jobstore():
+    """A dead store must not abort startup (previously it exited the app)."""
+    scheduler = make_scheduler()
+    scheduler._jobstores["dead"] = _UnreachableJobStore()
+
+    scheduler.start()
+    try:
+        assert scheduler.state == 1  # STATE_RUNNING
+        assert scheduler._thread is not None
+        assert scheduler._thread.is_alive()
+    finally:
+        scheduler.shutdown()
+
+
+def test_get_jobs_skips_unreachable_jobstore():
+    """Listing jobs degrades to the stores that answer."""
+    scheduler = make_scheduler()
+    scheduler.add_job(
+        make_workflow(), trigger=IntervalTrigger(seconds=60), job_id="j1"
+    )
+    scheduler._jobstores["dead"] = _UnreachableJobStore()
+
+    assert [job.job_id for job in scheduler.get_jobs()] == ["j1"]
+    assert scheduler.get_job("j1").job_id == "j1"
+
+
+def test_jobstore_probe_reports_and_caches_failure():
+    """Probing a dead store reports the error and backs off between tries."""
+    scheduler = make_scheduler()
+    attempts: list[int] = []
+
+    class DeadStore(MemoryJobStore):
+        def get_all(self):
+            attempts.append(1)
+            raise ConnectionError("backend down")
+
+    scheduler._jobstores["dead"] = DeadStore()
+    scheduler.JOBSTORE_RETRY_AFTER_SECONDS = 30.0
+
+    first = scheduler.jobstore_probe("dead")
+    second = scheduler.jobstore_probe("dead")
+
+    assert first["reachable"] is False
+    assert first["job_count"] == 0
+    assert "backend down" in first["error"]
+    assert second == first, "the cached failure must be reported again"
+    assert len(attempts) == 1, "the cooldown must skip the second round trip"
+
+    # A store that is not registered at all is reported as not loaded.
+    missing = scheduler.jobstore_probe("ghost")
+    assert missing["reachable"] is False
+    assert missing["error"]
+
+    # Healthy stores report a count.
+    scheduler.add_job(
+        make_workflow(), trigger=IntervalTrigger(seconds=60), job_id="j1"
+    )
+    healthy = scheduler.jobstore_probe("default")
+    assert healthy == {"job_count": 1, "reachable": True, "error": None}
+
+
+def test_count_jobs_by_jobstore_tolerates_unreachable_store():
+    """A dead store counts as empty so it can still be removed."""
+    scheduler = make_scheduler()
+    scheduler._jobstores["dead"] = _UnreachableJobStore()
+    assert scheduler.count_jobs_by_jobstore("dead") == 0
+
+
 def test_concurrent_add_and_cancel_no_deadlock():
     import threading
 

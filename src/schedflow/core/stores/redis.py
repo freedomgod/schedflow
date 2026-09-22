@@ -16,10 +16,14 @@ from schedflow.core.snapshot import RunSnapshot
 
 try:
     from redis import Redis
+    from redis.backoff import NoBackoff
+    from redis.retry import Retry
 except ImportError:  # pragma: no cover - optional dependency
     # The dependency is checked at instantiation time so importing the package
     # works without optional extras installed.
     Redis = None  # type: ignore[assignment,misc]
+    NoBackoff = None  # type: ignore[assignment,misc]
+    Retry = None  # type: ignore[assignment,misc]
 
 
 class RedisJobStore(JobStore):
@@ -47,6 +51,11 @@ class RedisJobStore(JobStore):
             username=username or None,
             password=password or None,
             socket_connect_timeout=5,
+            # redis-py's default exponential retry turns one refused
+            # connection into ~15s of blocking. The jobstore is polled
+            # continuously, so fail fast and let the caller decide how soon
+            # to try again.
+            retry=Retry(NoBackoff(), 0) if Retry is not None else None,
         )
         self._jobs_key = f"{prefix}:jobs"
         self._run_times_key = f"{prefix}:run_times"

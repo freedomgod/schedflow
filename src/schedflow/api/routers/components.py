@@ -292,14 +292,12 @@ def list_jobstore_plugins(scheduler: Scheduler = Depends(get_core_scheduler)):
 
 @router.get("/jobstores/configured")
 def list_configured_jobstores(scheduler: Scheduler = Depends(get_core_scheduler)):
-    configs = load_jobstore_configs()
     result = []
-    for alias, cfg in configs.items():
-        job_count = scheduler.count_jobs_by_jobstore(alias)
+    for alias, cfg in load_jobstore_configs().items():
         result.append({
             "alias": alias,
             "type": cfg.get("type", "memory"),
-            "job_count": job_count,
+            **scheduler.jobstore_probe(alias),
         })
     return APIResponse(data=result)
 

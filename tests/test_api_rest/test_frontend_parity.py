@@ -151,6 +151,45 @@ def test_jobstore_configure_rejects_unknown_option():
         assert "password" in detail  # lists the supported options
 
 
+def test_configured_jobstores_report_unreachable_backend():
+    """An unreachable store is flagged per alias instead of failing the list."""
+    aliases = ["parity-ok", "parity-down"]
+    try:
+        with _client() as client:
+            ok = client.post(
+                "/api/v1/components/jobstores/configure/parity-ok",
+                json={"type": "sqlalchemy", "config": {"url": "sqlite:///:memory:"}},
+            )
+            assert ok.status_code == 200, ok.text
+            # Port 6399 is closed: the redis client cannot even connect.
+            down = client.post(
+                "/api/v1/components/jobstores/configure/parity-down",
+                json={
+                    "type": "redis",
+                    "config": {"host": "127.0.0.1", "port": 6399, "db": 0},
+                },
+            )
+            assert down.status_code == 200, down.text
+
+            resp = client.get("/api/v1/components/jobstores/configured")
+            assert resp.status_code == 200, resp.text
+            listed = {item["alias"]: item for item in resp.json()["data"]}
+
+            assert listed["parity-ok"]["reachable"] is True
+            assert listed["parity-ok"]["error"] is None
+
+            broken = listed["parity-down"]
+            assert broken["reachable"] is False
+            assert broken["job_count"] == 0
+            assert broken["error"], "the failure reason must be surfaced"
+    finally:
+        for alias in aliases:
+            try:
+                remove_jobstore_config(alias)
+            except Exception:  # noqa: BLE001, S110 - cleanup best effort
+                pass
+
+
 def test_job_created_via_api_runs_and_logs():
     with _client() as client:
         resp = client.post(

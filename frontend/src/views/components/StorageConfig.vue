@@ -44,12 +44,37 @@
 
     <!-- Table -->
     <el-card shadow="never">
+      <el-alert
+        v-if="unreachableStores.length"
+        type="error"
+        :closable="false"
+        show-icon
+        class="store-alert"
+        title="部分存储后端连接不上"
+      >
+        <div
+          v-for="store in unreachableStores"
+          :key="store.alias"
+          class="store-alert-row"
+        >
+          <strong>{{ store.alias }}</strong>
+          <span class="store-alert-type">（{{ store.type }}）</span>
+          ：{{ store.error || '无法连接存储后端' }}
+        </div>
+      </el-alert>
       <el-table :data="configured" stripe style="width: 100%" v-loading="loading">
         <el-table-column prop="alias" label="别名" min-width="140">
           <template #default="{ row }">
             <span class="alias-cell">
               <span class="alias-text">{{ row.alias }}</span>
               <el-tag v-if="row.alias === 'default'" size="small" type="info" effect="plain">默认</el-tag>
+              <el-tooltip
+                v-if="row.reachable === false"
+                :content="row.error || '无法连接存储后端'"
+                placement="top"
+              >
+                <el-tag size="small" type="danger" effect="plain">连接失败</el-tag>
+              </el-tooltip>
             </span>
           </template>
         </el-table-column>
@@ -73,7 +98,19 @@
         </el-table-column>
         <el-table-column label="任务数" width="100" align="center">
           <template #default="{ row }">
-            <el-badge :value="row.jobCount || 0" :type="row.jobCount > 0 ? 'primary' : 'info'" show-zero />
+            <el-tooltip
+              v-if="row.reachable === false"
+              :content="row.error || '无法连接存储后端'"
+              placement="top"
+            >
+              <span class="job-count-unknown">未知</span>
+            </el-tooltip>
+            <el-badge
+              v-else
+              :value="row.jobCount || 0"
+              :type="row.jobCount > 0 ? 'primary' : 'info'"
+              show-zero
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
@@ -197,6 +234,10 @@ const totalJobCount = computed(() =>
   configured.value.reduce((sum, item) => sum + (item.jobCount || 0), 0)
 )
 
+const unreachableStores = computed(() =>
+  configured.value.filter((item) => item.reachable === false)
+)
+
 const SENSITIVE_KEYS = ['password', 'passwd', 'pwd', 'secret', 'secret_key', 'token', 'api_key', 'access_key', 'auth', 'authorization']
 
 function formatVal(key: string | number, val: unknown): string {
@@ -234,6 +275,8 @@ async function fetchData() {
       })
     )
     configured.value = detailed
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.detail || err?.message || '加载存储器列表失败')
   } finally {
     loading.value = false
   }
@@ -397,6 +440,11 @@ onMounted(fetchData)
 .config-params { display: flex; flex-wrap: wrap; gap: 4px; }
 .param-tag { margin: 0; }
 .no-config { color: var(--text-muted); }
+
+.store-alert { margin-bottom: var(--space-md); }
+.store-alert-row { font-size: 12px; line-height: 1.6; }
+.store-alert-type { color: var(--text-muted); }
+.job-count-unknown { color: var(--color-danger); font-size: 12px; cursor: help; }
 
 .param-label { display: inline-flex; align-items: center; gap: 4px; }
 .param-hint { color: var(--text-muted); cursor: help; }

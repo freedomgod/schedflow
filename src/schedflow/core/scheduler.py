@@ -75,6 +75,10 @@ class Scheduler:
         scheduler.shutdown()
     """
 
+    #: How long a jobstore that failed is skipped before it is probed again.
+    #: Keeps a dead backend from stalling the loop on every pass.
+    JOBSTORE_RETRY_AFTER_SECONDS = 5.0
+
     def __init__(
         self,
         *,
@@ -107,6 +111,8 @@ class Scheduler:
         self._stop_event = threading.Event()
         self._wakeup_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._jobstore_unhealthy_until: dict[str, float] = {}
+        self._jobstore_last_error: dict[str, str] = {}
         gauge_set("schedflow_scheduler_state", 0)
 
     # ── timezone ────────────────────────────────────────────────────────
@@ -292,7 +298,33 @@ class Scheduler:
         jobstore = self._jobstores.get(alias)
         if jobstore is None:
             return 0
-        return len(jobstore.get_all())
+        return len(self._guarded(alias, jobstore.get_all, default=[]) or [])
+
+    def jobstore_probe(self, alias: str) -> dict:
+        """Live health of one jobstore, for the components API.
+
+        Reports ``job_count`` together with ``reachable``/``error`` so the
+        storage page can flag a backend that is down instead of showing a
+        misleading zero. A store that just failed is not probed again until
+        ``JOBSTORE_RETRY_AFTER_SECONDS`` elapses, which keeps a dead backend
+        from stalling every HTTP request.
+        """
+        jobstore = self._jobstores.get(alias)
+        if jobstore is None:
+            return {
+                "job_count": 0,
+                "reachable": False,
+                "error": "存储后端未加载：插件不可用或初始化失败",
+            }
+        jobs = self._guarded(alias, jobstore.get_all, default=None)
+        if jobs is None:
+            return {
+                "job_count": 0,
+                "reachable": False,
+                "error": self._jobstore_last_error.get(alias)
+                or "存储后端不可用",
+            }
+        return {"job_count": len(jobs), "reachable": True, "error": None}
 
     def count_jobs_by_executor(self, alias: str) -> int:
         return sum(
@@ -494,17 +526,18 @@ class Scheduler:
     def get_jobs(self, jobstore_alias: str | None = None) -> list[Job]:
         with self._lock:
             if jobstore_alias is None:
-                return [
-                    job
-                    for jobstore in self._jobstores.values()
-                    for job in jobstore.get_all()
-                ]
+                jobs: list[Job] = []
+                for alias, jobstore in self._jobstores.items():
+                    jobs.extend(
+                        self._guarded(alias, jobstore.get_all, default=[]) or []
+                    )
+                return jobs
             return self.get_jobstore(jobstore_alias).get_all()
 
     def _find_job(self, job_id: str) -> Job | None:
         """Locate a job across all registered jobstores."""
-        for jobstore in self._jobstores.values():
-            job = jobstore.get(job_id)
+        for alias, jobstore in self._jobstores.items():
+            job = self._guarded(alias, jobstore.get, job_id)
             if job is not None:
                 return job
         return None
@@ -665,9 +698,9 @@ class Scheduler:
         """
         repaired: list[str] = []
         with self._lock:
-            stores = list(self._jobstores.values()) or [self._jobstore]
-            for store in stores:
-                for job in store.get_all():
+            stores = list(self._jobstores.items()) or [("default", self._jobstore)]
+            for alias, store in stores:
+                for job in self._guarded(alias, store.get_all, default=[]) or []:
                     if job.status == "running" or job.next_run_time is None:
                         continue
                     self._disarm(job)
@@ -899,14 +932,17 @@ class Scheduler:
     def get_job_logs(self, job_id: str) -> list[ExecutionLog]:
         with self._lock:
             logs: list[ExecutionLog] = []
-            for jobstore in self._jobstores.values():
-                logs.extend(jobstore.get_logs(job_id))
+            for alias, jobstore in self._jobstores.items():
+                logs.extend(
+                    self._guarded(alias, jobstore.get_logs, job_id, default=[])
+                    or []
+                )
             return logs
 
     def get_job_log(self, job_id: str, log_id: str) -> ExecutionLog | None:
         with self._lock:
-            for jobstore in self._jobstores.values():
-                log = jobstore.get_log(job_id, log_id)
+            for alias, jobstore in self._jobstores.items():
+                log = self._guarded(alias, jobstore.get_log, job_id, log_id)
                 if log is not None:
                     return log
             return None
@@ -1074,8 +1110,10 @@ class Scheduler:
             self._main_loop_iteration_for_test()
             with self._dispatch_lock:
                 next_run = None
-                for jobstore in self._jobstores.values():
-                    candidate = jobstore.get_next_run_time()
+                for alias, jobstore in self._jobstores.items():
+                    candidate = self._guarded(
+                        alias, jobstore.get_next_run_time
+                    )
                     if candidate is not None and (
                         next_run is None or candidate < next_run
                     ):
@@ -1093,6 +1131,48 @@ class Scheduler:
             self._wakeup_event.clear()
             self._wakeup_event.wait(wait_seconds)
 
+    def _guard_store(self, alias: str, error: Exception) -> None:
+        """Report an unreachable jobstore without killing the main loop.
+
+        A backend that is down (server stopped, bad credentials, network
+        partition) used to take the whole scheduler thread with it. Now the
+        store is skipped for that pass, the failure is logged at most once a
+        minute, and ``scheduler.error`` is published for subscribers. The
+        alias is also parked for ``JOBSTORE_RETRY_AFTER_SECONDS`` so the next
+        calls (loop passes, API requests) do not pay the timeout again.
+        """
+        counter_inc("schedflow_jobstore_errors_total")
+        text = " ".join(str(error).split())
+        self._jobstore_last_error[alias] = text[:300] or type(error).__name__
+        self._jobstore_unhealthy_until[alias] = (
+            time.monotonic() + self.JOBSTORE_RETRY_AFTER_SECONDS
+        )
+        key = f"jobstore:{alias}"
+        if time.monotonic() - self._error_event_logged_at.get(key, 0.0) >= 60:
+            LOGGER.warning("jobstore %r unavailable: %s", alias, error)
+        self._publish_error(error, key=key)
+
+    def _guarded(self, alias: str, func, /, *args, default=None, **kwargs):
+        """Call a jobstore method, degrading to ``default`` when it is down.
+
+        An unreachable backend (server stopped, bad credentials, network
+        partition) must not take down the scheduler thread, the startup
+        recovery pass or the read endpoints — the failure is reported per
+        alias instead (``scheduler.error`` + the components API).
+        """
+        if time.monotonic() < self._jobstore_unhealthy_until.get(alias, 0.0):
+            # Recently failed: skip the slow round trip until the cooldown
+            # expires instead of stalling the caller on every attempt.
+            return default
+        try:
+            result = func(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - one dead store is not fatal
+            self._guard_store(alias, exc)
+            return default
+        self._jobstore_unhealthy_until.pop(alias, None)
+        self._jobstore_last_error.pop(alias, None)
+        return result
+
     def _main_loop_iteration_for_test(self) -> None:
         """Run one due-processing pass with error visibility (loop body)."""
         if self.state == STATE_RUNNING:
@@ -1106,8 +1186,10 @@ class Scheduler:
     def _process_due(self) -> None:
         now = datetime.now(self._timezone)
         due = []
-        for jobstore in self._jobstores.values():
-            due.extend(jobstore.get_due(now))
+        for alias, jobstore in self._jobstores.items():
+            due.extend(
+                self._guarded(alias, jobstore.get_due, now, default=[]) or []
+            )
         for job in due:
             self._run_due_job(job, now)
 

@@ -24,6 +24,10 @@ export interface ConfiguredJobstore {
   alias: string
   type: string
   job_count: number
+  /** false 表示后端连不上（服务未启动/凭据错误/插件未加载） */
+  reachable?: boolean
+  /** 连接失败的原因，供悬浮提示展示 */
+  error?: string | null
 }
 
 export interface ExecutorPluginParam {
