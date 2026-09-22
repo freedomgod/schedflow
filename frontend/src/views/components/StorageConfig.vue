@@ -113,9 +113,25 @@
         <el-form-item
           v-for="param in currentPluginParams"
           :key="param.name"
-          :label="param.label"
           :required="param.required"
         >
+          <template #label>
+            <span class="param-label">
+              {{ param.label }}
+              <el-tooltip
+                v-if="param.hint"
+                placement="top"
+                :show-after="100"
+              >
+                <template #content>
+                  <span style="display: inline-block; max-width: 280px; line-height: 1.5">
+                    {{ param.hint }}
+                  </span>
+                </template>
+                <el-icon class="param-hint"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </span>
+          </template>
           <el-input
             v-if="param.type === 'string' || param.type === 'number'"
             v-model="form.config[param.name]"
@@ -144,7 +160,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, QuestionFilled } from '@element-plus/icons-vue'
 import {
   getJobstorePlugins,
   getConfiguredJobstores,
@@ -381,4 +397,8 @@ onMounted(fetchData)
 .config-params { display: flex; flex-wrap: wrap; gap: 4px; }
 .param-tag { margin: 0; }
 .no-config { color: var(--text-muted); }
+
+.param-label { display: inline-flex; align-items: center; gap: 4px; }
+.param-hint { color: var(--text-muted); cursor: help; }
+.param-hint:hover { color: var(--color-primary); }
 </style>

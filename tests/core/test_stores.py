@@ -437,3 +437,128 @@ def test_lookups_ignore_paused_job_with_stub_client():
             assert store.get_snapshot("mongo-snap", "run-1") is None
         finally:
             store.close()
+
+
+def test_sqlalchemy_jobstore_applies_engine_options():
+    """``engine_options`` from the storage form reaches ``create_engine``."""
+    store = SQLAlchemyJobStore(
+        url="sqlite:///:memory:", engine_options={"echo": True}
+    )
+    try:
+        assert store._engine.echo is True
+        store.add(make_job())
+        assert store.get("j1").job_id == "j1"
+    finally:
+        store.close()
+
+
+def test_redis_jobstore_forwards_credentials(monkeypatch):
+    """Redis AUTH fields from the storage form reach the redis client."""
+    import schedflow.core.stores.redis as redis_module
+
+    captured: dict = {}
+
+    class RecordingRedis:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(redis_module, "Redis", RecordingRedis)
+
+    RedisJobStore(
+        host="redis.internal",
+        port=6380,
+        db=3,
+        username="svc",
+        password="s3cret",
+    )
+
+    assert captured == {
+        "host": "redis.internal",
+        "port": 6380,
+        "db": 3,
+        "username": "svc",
+        "password": "s3cret",
+        "socket_connect_timeout": 5,
+    }
+
+
+def test_redis_jobstore_omits_blank_credentials(monkeypatch):
+    """An untouched (empty) username/password field must not enable AUTH."""
+    import schedflow.core.stores.redis as redis_module
+
+    captured: dict = {}
+
+    class RecordingRedis:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(redis_module, "Redis", RecordingRedis)
+
+    RedisJobStore(host="localhost", port=6379, db=0, username="", password="")
+
+    assert captured["username"] is None
+    assert captured["password"] is None
+
+
+def _stub_mongo_client(captured: dict):
+    """MongoClient stand-in that records kwargs and supports ``db[collection]``."""
+
+    class StubCollection:
+        def __getitem__(self, name):
+            return self
+
+    class StubMongoClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def __getitem__(self, name):
+            return StubCollection()
+
+    return StubMongoClient
+
+
+def test_mongodb_jobstore_forwards_credentials(monkeypatch):
+    """MongoDB auth fields from the storage form reach the MongoClient."""
+    import schedflow.core.stores.mongo as mongo_module
+
+    captured: dict = {}
+
+    monkeypatch.setattr(
+        mongo_module, "MongoClient", _stub_mongo_client(captured)
+    )
+
+    MongoDBJobStore(
+        host="mongo.internal",
+        port=27018,
+        database="db1",
+        collection="c1",
+        username="svc",
+        password="s3cret",
+        authSource="admin",
+    )
+
+    assert captured == {
+        "host": "mongo.internal",
+        "port": 27018,
+        "serverSelectionTimeoutMS": 3000,
+        "username": "svc",
+        "password": "s3cret",
+        "authSource": "admin",
+    }
+
+
+def test_mongodb_jobstore_omits_blank_credentials(monkeypatch):
+    """Blank auth fields must fall back to an unauthenticated connection."""
+    import schedflow.core.stores.mongo as mongo_module
+
+    captured: dict = {}
+
+    monkeypatch.setattr(
+        mongo_module, "MongoClient", _stub_mongo_client(captured)
+    )
+
+    MongoDBJobStore(
+        database="schedflow_test", username="", password="", authSource=""
+    )
+
+    assert set(captured) == {"host", "port", "serverSelectionTimeoutMS"}

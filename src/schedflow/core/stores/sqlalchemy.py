@@ -45,13 +45,19 @@ _LOCKED_MARKERS = (
 class SQLAlchemyJobStore(JobStore):
     """JobStore backed by any SQLAlchemy-supported database."""
 
-    def __init__(self, url: str = "sqlite:///:memory:", *, engine=None) -> None:
+    def __init__(
+        self,
+        url: str = "sqlite:///:memory:",
+        *,
+        engine=None,
+        engine_options: dict | None = None,
+    ) -> None:
         if sa is None:  # pragma: no cover
             raise ImportError(
                 "SQLAlchemyJobStore requires the 'sqlalchemy' package. "
                 "Install it with: pip install schedflow[sqlalchemy]"
             )
-        self._engine = engine or sa.create_engine(url)
+        self._engine = engine or sa.create_engine(url, **(engine_options or {}))
         database = getattr(self._engine.url, "database", None)
         # In-memory SQLite uses one database per thread, so schema state must
         # not be cached for it.

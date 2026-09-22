@@ -31,16 +31,30 @@ class MongoDBJobStore(JobStore):
         port: int = 27017,
         database: str = "schedflow",
         collection: str = "jobs",
+        *,
+        username: str | None = None,
+        password: str | None = None,
+        # ``authSource`` keeps pymongo's spelling so the storage form key and
+        # the driver keyword stay identical.
+        authSource: str | None = None,
     ) -> None:
         if MongoClient is None:  # pragma: no cover
             raise ImportError(
                 "MongoDBJobStore requires the 'pymongo' package. "
                 "Install it with: pip install schedflow[mongodb]"
             )
+        credentials: dict[str, str] = {}
+        if username:
+            credentials["username"] = username
+        if password:
+            credentials["password"] = password
+        if authSource:
+            credentials["authSource"] = authSource
         self._client = MongoClient(
             host=host,
             port=int(port),
             serverSelectionTimeoutMS=3000,
+            **credentials,
         )
         self._collection = self._client[database][collection]
         self._logs_collection = self._client[database][f"{collection}_logs"]

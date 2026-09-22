@@ -29,6 +29,8 @@ class RedisJobStore(JobStore):
         port: int = 6379,
         db: int = 0,
         *,
+        username: str | None = None,
+        password: str | None = None,
         prefix: str = "schedflow",
     ) -> None:
         if Redis is None:  # pragma: no cover
@@ -40,6 +42,10 @@ class RedisJobStore(JobStore):
             host=host,
             port=int(port),
             db=int(db),
+            # redis-py treats None as "no AUTH"; empty strings are also
+            # normalised away so an untouched UI field never sends "".
+            username=username or None,
+            password=password or None,
             socket_connect_timeout=5,
         )
         self._jobs_key = f"{prefix}:jobs"

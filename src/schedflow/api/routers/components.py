@@ -1,3 +1,5 @@
+import inspect
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from schedflow.api.deps import get_core_scheduler
@@ -80,28 +82,137 @@ def reschedule_job(job_id: str, request: RescheduleRequest, scheduler: Scheduler
     })
 
 
-# Hardcoded param schemas for known jobstore plugins
+# Hardcoded param schemas for known jobstore plugins.
+#
+# These fields are the contract the frontend renders, so every ``name`` here
+# must be an accepted keyword argument of the matching JobStore subclass (see
+# tests/test_api_rest/test_frontend_parity.py). The optional ``hint`` key is
+# shown as a hover tooltip in the storage configuration form.
 _JOBSTORE_PARAM_SCHEMAS: dict[str, list[dict]] = {
     "memory": [],
     "sqlalchemy": [
-        {"name": "url", "type": "string", "required": True, "label": "数据库URL", "placeholder": "sqlite:///data/jobs.db"},
-        {"name": "tableschema", "type": "string", "required": False, "label": "表 Schema", "placeholder": "可选"},
-        {"name": "engine_options", "type": "json", "required": False, "label": "引擎选项 (JSON)", "placeholder": "{}"},
+        {
+            "name": "url",
+            "type": "string",
+            "required": True,
+            "label": "数据库URL",
+            "placeholder": "sqlite:///data/jobs.db",
+            "hint": "SQLAlchemy 连接串。SQLite 示例 sqlite:///data/jobs.db（目录需已存在）；"
+                    "其他数据库示例 postgresql://user:密码@主机:5432/库名。",
+        },
+        {
+            "name": "engine_options",
+            "type": "json",
+            "required": False,
+            "label": "引擎选项 (JSON)",
+            "placeholder": "{}",
+            "hint": "透传给 SQLAlchemy create_engine 的额外参数，JSON 对象，例如 "
+                    "{\"pool_pre_ping\": true, \"pool_size\": 5}；留空使用默认值。",
+        },
     ],
     "redis": [
-        {"name": "host", "type": "string", "required": False, "label": "主机", "placeholder": "localhost"},
-        {"name": "port", "type": "number", "required": False, "label": "端口", "placeholder": "6379"},
-        {"name": "db", "type": "number", "required": False, "label": "数据库编号", "placeholder": "0"},
-        {"name": "password", "type": "string", "required": False, "label": "密码", "placeholder": "可选"},
+        {
+            "name": "host",
+            "type": "string",
+            "required": False,
+            "label": "主机",
+            "placeholder": "localhost",
+            "hint": "Redis 服务地址：本机填 localhost，远程/容器填对应的 IP 或域名。",
+        },
+        {
+            "name": "port",
+            "type": "number",
+            "required": False,
+            "label": "端口",
+            "placeholder": "6379",
+            "hint": "Redis 监听端口，默认 6379。",
+        },
+        {
+            "name": "db",
+            "type": "number",
+            "required": False,
+            "label": "数据库编号",
+            "placeholder": "0",
+            "hint": "Redis 逻辑数据库编号（默认 0-15），同一实例内不同编号的数据互相隔离。"
+                    "SchedFlow 只占用其中一个，通常填 0 即可。",
+        },
+        {
+            "name": "username",
+            "type": "string",
+            "required": False,
+            "label": "用户名",
+            "placeholder": "可选",
+            "hint": "Redis 6+ ACL 用户名；使用默认用户时填 default，未启用 ACL 则留空。",
+        },
+        {
+            "name": "password",
+            "type": "string",
+            "required": False,
+            "label": "密码",
+            "placeholder": "可选",
+            "hint": "Redis 访问密码（requirepass 配置）。服务端未设置密码时留空。",
+        },
     ],
     "mongodb": [
-        {"name": "host", "type": "string", "required": False, "label": "主机", "placeholder": "localhost"},
-        {"name": "port", "type": "number", "required": False, "label": "端口", "placeholder": "27017"},
-        {"name": "database", "type": "string", "required": False, "label": "数据库名", "placeholder": "schedflow"},
-        {"name": "collection", "type": "string", "required": False, "label": "集合名", "placeholder": "jobs"},
-        {"name": "username", "type": "string", "required": False, "label": "用户名", "placeholder": "可选"},
-        {"name": "password", "type": "string", "required": False, "label": "密码", "placeholder": "可选"},
-        {"name": "authSource", "type": "string", "required": False, "label": "认证数据库", "placeholder": "admin"},
+        {
+            "name": "host",
+            "type": "string",
+            "required": False,
+            "label": "主机",
+            "placeholder": "localhost",
+            "hint": "MongoDB 服务地址：本机填 localhost，远程/容器填对应的 IP 或域名。",
+        },
+        {
+            "name": "port",
+            "type": "number",
+            "required": False,
+            "label": "端口",
+            "placeholder": "27017",
+            "hint": "MongoDB 监听端口，默认 27017。",
+        },
+        {
+            "name": "database",
+            "type": "string",
+            "required": False,
+            "label": "数据库名",
+            "placeholder": "schedflow",
+            "hint": "存放 SchedFlow 数据的数据库名（相当于 MySQL 的库），不存在会自动创建，"
+                    "默认 schedflow。",
+        },
+        {
+            "name": "collection",
+            "type": "string",
+            "required": False,
+            "label": "集合名",
+            "placeholder": "jobs",
+            "hint": "存放任务文档的集合名（相当于关系库的表），默认 jobs；"
+                    "执行日志和运行快照会自动使用 jobs_logs、jobs_snapshots 等集合。",
+        },
+        {
+            "name": "username",
+            "type": "string",
+            "required": False,
+            "label": "用户名",
+            "placeholder": "可选",
+            "hint": "服务端开启鉴权（--auth）时填写 MongoDB 用户名，未开启则留空。",
+        },
+        {
+            "name": "password",
+            "type": "string",
+            "required": False,
+            "label": "密码",
+            "placeholder": "可选",
+            "hint": "上述用户名对应的密码，未开启鉴权时留空。",
+        },
+        {
+            "name": "authSource",
+            "type": "string",
+            "required": False,
+            "label": "认证数据库",
+            "placeholder": "admin",
+            "hint": "校验用户名/密码所用的数据库，内置管理员账号通常填 admin；"
+                    "留空时由 MongoDB 按连接串默认规则推断。",
+        },
     ],
 }
 
@@ -120,6 +231,53 @@ _EXECUTOR_PARAM_SCHEMAS: dict[str, list[dict]] = {
     "tornado": [],
     "twisted": [],
 }
+
+
+def _accepted_plugin_options(plugin_cls: type) -> set[str] | None:
+    """Return the keyword options ``plugin_cls.__init__`` accepts.
+
+    ``None`` means the constructor declares ``**kwargs`` and therefore accepts
+    any option, in which case no validation is possible.
+    """
+    try:
+        parameters = inspect.signature(plugin_cls.__init__).parameters
+    except (TypeError, ValueError):  # pragma: no cover - exotic/callable objects
+        return None
+    accepted: set[str] = set()
+    for name, parameter in parameters.items():
+        if name == "self":
+            continue
+        if parameter.kind is inspect.Parameter.VAR_KEYWORD:
+            return None
+        if parameter.kind in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        ):
+            accepted.add(name)
+    return accepted
+
+
+def _ensure_supported_options(
+    plugin_cls: type, kind: str, alias: str, config: dict
+) -> None:
+    """Reject unknown configuration keys with a 400 instead of a 500.
+
+    A stale or buggy frontend field would otherwise reach the plugin
+    constructor and surface as ``TypeError: ... unexpected keyword argument``.
+    """
+    accepted = _accepted_plugin_options(plugin_cls)
+    if accepted is None:
+        return
+    unknown = sorted(set(config) - accepted)
+    if unknown:
+        supported = ", ".join(sorted(accepted)) or "(none)"
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{kind} '{alias}' does not support option(s): "
+                f"{', '.join(unknown)}. Supported options: {supported}"
+            ),
+        )
 
 
 @router.get("/jobstores/plugins")
@@ -153,6 +311,9 @@ def configure_jobstore(
     scheduler: Scheduler = Depends(get_core_scheduler),
 ):
     config = dict(request.config)
+    plugin_cls = JOBSTORE_PLUGINS.get(request.type)
+    if plugin_cls is not None:
+        _ensure_supported_options(plugin_cls, "Jobstore", alias, config)
     scheduler.add_jobstore(request.type, alias, **config)
     save_jobstore_config(alias, request.type, config)
     return APIResponse(message=f"Jobstore '{alias}' configured")
@@ -165,6 +326,9 @@ def update_jobstore(
     scheduler: Scheduler = Depends(get_core_scheduler),
 ):
     config = dict(request.config)
+    plugin_cls = JOBSTORE_PLUGINS.get(request.type)
+    if plugin_cls is not None:
+        _ensure_supported_options(plugin_cls, "Jobstore", alias, config)
 
     # Read old config BEFORE writing new one
     old_cfg = get_jobstore_config(alias)

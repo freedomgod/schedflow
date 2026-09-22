@@ -11,6 +11,8 @@ export interface JobstorePluginParam {
   required: boolean
   label: string
   placeholder: string
+  /** 悬浮提示，说明该字段的含义与常见取值 */
+  hint?: string
 }
 
 export interface JobstorePlugin {

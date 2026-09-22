@@ -5,6 +5,7 @@ executor/jobstore/trigger lists, job execution, SSE and store configuration.
 """
 
 import asyncio
+import inspect
 import json
 import time
 
@@ -12,10 +13,12 @@ from fastapi.testclient import TestClient
 
 from schedflow.api import create_app
 from schedflow.configs.config import (
+    get_jobstore_config,
     remove_executor_config,
     remove_jobstore_config,
 )
 from schedflow.core import Scheduler
+from schedflow.core.plugins import JOBSTORE_PLUGINS
 
 
 def _client():
@@ -50,6 +53,102 @@ def test_component_plugin_sets_match_frontend_contract():
         assert set(jobstores) == {"memory", "sqlalchemy", "redis", "mongodb"}
         triggers = [t["name"] for t in client.get("/api/v1/components/triggers").json()["data"]]
         assert set(triggers) == {"calendarinterval", "date", "interval", "cron", "and", "or"}
+
+
+def test_jobstore_param_schemas_match_constructor_signatures():
+    """Every field the storage form renders must be a real plugin option.
+
+    Regression guard: the form used to advertise redis ``password`` and
+    mongodb ``username``/``password``/``authSource`` while the stores rejected
+    them, so saving a configuration died with a 500.
+    """
+    with _client() as client:
+        plugins = client.get("/api/v1/components/jobstores/plugins").json()["data"]
+
+    for plugin in plugins:
+        plugin_cls = JOBSTORE_PLUGINS[plugin["name"]]
+        parameters = inspect.signature(plugin_cls.__init__).parameters
+        if any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters.values()
+        ):
+            continue
+        accepted = set(parameters) - {"self"}
+        advertised = {param["name"] for param in plugin["params"]}
+        assert advertised <= accepted, (
+            f"{plugin['name']} advertises unsupported option(s): "
+            f"{sorted(advertised - accepted)}"
+        )
+
+
+def test_jobstore_configure_accepts_advertised_auth_params():
+    """redis/mongodb auth fields from the storage form save without a 500."""
+    aliases = ["parity-redis", "parity-mongo"]
+    try:
+        with _client() as client:
+            redis_resp = client.post(
+                "/api/v1/components/jobstores/configure/parity-redis",
+                json={
+                    "type": "redis",
+                    "config": {
+                        "host": "localhost",
+                        "port": 6379,
+                        "db": 1,
+                        "username": "default",
+                        "password": "s3cret",
+                    },
+                },
+            )
+            assert redis_resp.status_code == 200, redis_resp.text
+
+            mongo_resp = client.post(
+                "/api/v1/components/jobstores/configure/parity-mongo",
+                json={
+                    "type": "mongodb",
+                    "config": {
+                        "host": "localhost",
+                        "port": 27017,
+                        "database": "schedflow_test",
+                        "collection": "jobs",
+                        "username": "svc",
+                        "password": "s3cret",
+                        "authSource": "admin",
+                    },
+                },
+            )
+            assert mongo_resp.status_code == 200, mongo_resp.text
+
+            # Registered live and persisted, without querying the (absent)
+            # redis/mongodb servers.
+            scheduler = client.app.state.scheduler
+            assert scheduler.get_jobstore("parity-redis") is not None
+            assert scheduler.get_jobstore("parity-mongo") is not None
+
+            for alias in aliases:
+                saved = get_jobstore_config(alias)
+                assert saved is not None and saved["type"] in {"redis", "mongodb"}
+    finally:
+        for alias in aliases:
+            try:
+                remove_jobstore_config(alias)
+            except Exception:  # noqa: BLE001, S110 - cleanup best effort
+                pass
+
+
+def test_jobstore_configure_rejects_unknown_option():
+    """An unsupported option is a 400 with guidance, never a 500."""
+    with _client() as client:
+        resp = client.post(
+            "/api/v1/components/jobstores/configure/parity-bad",
+            json={
+                "type": "redis",
+                "config": {"host": "localhost", "tableschema": "ignored"},
+            },
+        )
+        assert resp.status_code == 400, resp.text
+        detail = resp.json()["detail"]
+        assert "tableschema" in detail
+        assert "password" in detail  # lists the supported options
 
 
 def test_job_created_via_api_runs_and_logs():
