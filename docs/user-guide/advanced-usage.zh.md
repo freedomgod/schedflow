@@ -267,12 +267,19 @@ PUT /api/v1/settings/webhooks
 {"webhooks": [
   {"url": "https://hooks.example.com/schedflow",
    "events": ["job.succeeded", "job.failed"],
-   "secret": "shared-secret"}
+   "secret": "shared-secret",
+   "platform": "feishu",
+   "link_base": "https://schedflow.example.com"}
 ]}
 
 PUT /api/v1/settings/rate-limit
 {"enabled": true, "rpm": 120}
 ```
+
+钉钉 / 企业微信 / 飞书目标会收到平台原生的富文本消息：钉钉 `actionCard`、
+企业微信 `template_card`（无跳转地址时回落 markdown）、飞书 `interactive` 卡片。
+`link_base` 是 SchedFlow 前端地址，用于在通知里生成跳转链接（任务级事件进工作流详情，
+节点级事件进日志页）；留空则发送不带链接的通知。前端「集成」页面默认填入当前访问地址。
 
 Webhook 投递为 best-effort：内存队列有界、单次请求 5s 超时、最多 3 次指数退避；
 失败会记录日志并增加 `schedflow_webhook_failures_total` 指标。限流仅作用于

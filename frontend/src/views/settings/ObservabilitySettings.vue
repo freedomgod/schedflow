@@ -7,7 +7,7 @@
       <h3 class="section-title">Webhook 通知</h3>
       <p class="section-desc">
         任务与调度器事件会推送到下面配置的目标。通用模式按原始 JSON 投递（便于自建服务消费），
-        钉钉 / 企业微信 / 飞书会按各自的消息格式发送；投递失败会重试 3 次，平台拒收时会把原因直接回显。
+        钉钉 / 企业微信 / 飞书会按各自的卡片样式发送；投递失败会重试 3 次，平台拒收时会把原因直接回显。
       </p>
 
       <p v-if="!webhooks.length" class="empty-hint">
@@ -67,6 +67,16 @@
               </el-option-group>
             </el-select>
             <span class="field-hint">{{ eventsSummary(hook) }}</span>
+          </el-form-item>
+
+          <el-form-item label="前端访问地址">
+            <el-input
+              v-model="hook.linkBase"
+              placeholder="https://schedflow.example.com"
+            />
+            <span class="field-hint">
+              用于在通知里拼接「查看详情」跳转链接（默认当前页面地址）；留空则发送不带链接的通知。
+            </span>
           </el-form-item>
 
           <el-form-item v-if="platformOf(hook).supportsSecret" :label="platformOf(hook).secretLabel">
@@ -149,7 +159,7 @@ const PLATFORMS: PlatformOption[] = [
   {
     value: 'dingtalk',
     label: '钉钉',
-    hint: '钉钉群机器人地址；安全设置选「加签」时填下面的密钥，选「自定义关键词」请确保关键词出现在通知里。',
+    hint: '钉钉群机器人地址；以 actionCard 卡片发送（标题 + markdown 详情 + 「查看详情」按钮）。安全设置选「加签」时填下面的密钥，选「自定义关键词」请确保关键词出现在通知里。',
     placeholder: 'https://oapi.dingtalk.com/robot/send?access_token=...',
     supportsSecret: true,
     secretLabel: '加签密钥（SEC 开头）',
@@ -158,7 +168,7 @@ const PLATFORMS: PlatformOption[] = [
   {
     value: 'wecom',
     label: '企业微信',
-    hint: '企业微信群机器人地址；安全设置请在群机器人侧配置关键词或 IP 白名单。',
+    hint: '企业微信群机器人地址；填写前端访问地址后以模板卡片（文本通知型）发送，卡片整体与「查看详情」均可跳转，否则退回 markdown 文本。安全设置请在群机器人侧配置关键词或 IP 白名单。',
     placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...',
     supportsSecret: false,
     secretLabel: '签名密钥',
@@ -167,7 +177,7 @@ const PLATFORMS: PlatformOption[] = [
   {
     value: 'feishu',
     label: '飞书',
-    hint: '飞书自定义机器人地址；开启「签名校验」时填下面的密钥。',
+    hint: '飞书自定义机器人地址；以 interactive 卡片发送（标题栏按结果着色 + 字段区 + 「查看详情」按钮）。开启「签名校验」时填下面的密钥。',
     placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...',
     supportsSecret: true,
     secretLabel: '签名校验密钥',
@@ -239,7 +249,14 @@ interface WebhookDraft {
   events: string[]
   secret: string
   platform: string
+  /** SchedFlow UI origin used for the notification jump link. */
+  linkBase: string
   result?: WebhookTestResult
+}
+
+/** Default the jump-link origin to wherever the console is served from. */
+function defaultLinkBase(): string {
+  return typeof window === 'undefined' ? '' : window.location.origin
 }
 
 const saving = ref(false)
@@ -268,6 +285,7 @@ async function load() {
     events: hook.events || [],
     secret: hook.secret || '',
     platform: hook.platform || 'generic',
+    linkBase: hook.link_base || defaultLinkBase(),
   }))
 }
 
@@ -278,6 +296,7 @@ function addWebhook() {
     events: ['job.succeeded', 'job.failed'],
     secret: '',
     platform: 'dingtalk',
+    linkBase: defaultLinkBase(),
   })
 }
 
@@ -296,6 +315,7 @@ async function saveWebhooks() {
           events: hook.events.length ? hook.events : ['*'],
           secret: hook.secret || undefined,
           platform: hook.platform,
+          link_base: hook.linkBase.trim() || undefined,
         })),
     )
     await load()
@@ -319,6 +339,7 @@ async function testWebhook(hook: WebhookDraft) {
       events: hook.events.length ? hook.events : ['*'],
       secret: hook.secret || undefined,
       platform: hook.platform,
+      link_base: hook.linkBase.trim() || undefined,
     })
     hook.result = result
     if (result.ok) {

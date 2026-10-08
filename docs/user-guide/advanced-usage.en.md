@@ -269,12 +269,21 @@ PUT /api/v1/settings/webhooks
 {"webhooks": [
   {"url": "https://hooks.example.com/schedflow",
    "events": ["job.succeeded", "job.failed"],
-   "secret": "shared-secret"}
+   "secret": "shared-secret",
+   "platform": "feishu",
+   "link_base": "https://schedflow.example.com"}
 ]}
 
 PUT /api/v1/settings/rate-limit
 {"enabled": true, "rpm": 120}
 ```
+
+DingTalk, WeCom and Feishu targets receive the platform's native rich message:
+DingTalk `actionCard`, WeCom `template_card` (falling back to markdown without a
+jump URL) and Feishu interactive cards. `link_base` is the SchedFlow UI origin
+used to build the jump link (job-level events open the workflow detail page,
+task-level events the log viewer); leave it empty for notifications without a
+link. The UI integration page pre-fills it with the current origin.
 
 Webhook delivery is best effort: a bounded in-memory queue, a 5s request
 timeout and up to 3 exponential-backoff retries; failures are logged and counted

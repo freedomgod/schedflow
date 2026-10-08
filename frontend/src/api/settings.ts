@@ -43,6 +43,8 @@ export interface WebhookConfig {
   secret?: string | null
   /** Delivery target: generic | dingtalk | wecom | feishu. */
   platform?: string
+  /** SchedFlow UI origin used to build notification jump links. */
+  link_base?: string | null
 }
 
 export interface RateLimitConfig {
@@ -126,6 +128,7 @@ export interface WebhookTestParams {
   secret?: string
   timeout?: number
   platform?: string
+  link_base?: string
 }
 
 export function testWebhookDelivery(params: WebhookTestParams): Promise<WebhookTestResult> {

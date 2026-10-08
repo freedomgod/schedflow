@@ -447,14 +447,18 @@ bus.unsubscribe("job.failed", callback)
 - **SSE execution events**: `GET /api/v1/sse/jobs/{job_id}/events` streams
   `job.*` and `task.*` events, replaying the latest run summary on connect;
 - **Webhooks**: `PUT /api/v1/settings/webhooks` configures
-  `url/events/secret/platform` with a bounded queue and limited retries;
-  failures never block scheduling. `platform` picks the request envelope:
-  `generic` (raw JSON, secret in the `X-SchedFlow-Secret` header), `dingtalk`
-  (markdown, secret used to sign the URL), `wecom` (markdown, no signing) or
-  `feishu` (text, secret used for signature verification). Targets that report
-  failure as `HTTP 200` with an `errcode`/`code` body are detected as failures
-  too, and the reason is logged and echoed by
-  `POST /api/v1/settings/webhooks/test`;
+  `url/events/secret/platform/link_base` with a bounded queue and limited
+  retries; failures never block scheduling. `platform` picks the request
+  envelope: `generic` (raw JSON, secret in the `X-SchedFlow-Secret` header),
+  `dingtalk` (actionCard with a markdown body and a jump button, secret used to
+  sign the URL), `wecom` (template_card, falling back to markdown when there is
+  no jump URL, no signing) or `feishu` (interactive card with an
+  outcome-coloured header, secret used for signature verification). The
+  optional `link_base` (SchedFlow UI origin) adds a "查看详情" jump link:
+  job-level events open `/jobs/{id}`, task-level events open
+  `/logs?jobId=...`. Targets that report failure as `HTTP 200` with an
+  `errcode`/`code` body are detected as failures too, and the reason is logged
+  and echoed by `POST /api/v1/settings/webhooks/test`;
 - **API rate limiting**: `PUT /api/v1/settings/rate-limit` (`enabled/rpm`)
   applies an in-process token bucket to write requests, returning 429 with
   `Retry-After`;

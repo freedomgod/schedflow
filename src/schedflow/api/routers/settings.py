@@ -157,7 +157,10 @@ def webhooks_set(request_body: WebhooksRequest, request: Request):
 @router.post("/webhooks/test")
 def webhooks_test(request_body: WebhookTestRequest):
     """Deliver a sample event so users can verify a webhook end to end."""
+    from datetime import datetime
+
     from schedflow.core.webhook import WebhookConfig, deliver_once
+    from schedflow.settings.services import resolve_timezone
 
     candidate = request_body.model_dump(exclude_none=True)
     if not candidate.get("url"):
@@ -169,12 +172,32 @@ def webhooks_test(request_body: WebhookTestRequest):
     event = (config.events or ("job.succeeded",))[0]
     if event == "*" or event.endswith(".*"):
         event = "job.succeeded"
+    failed = event in ("job.failed", "task.error")
+    try:
+        tz = resolve_timezone(get_default_timezone())
+    except ValueError:  # pragma: no cover - get_default_timezone always resolves
+        tz = None
     payload = {
         "kind": event,
-        "job_id": "test",
-        "run_time": None,
+        "job_id": "demo-job",
+        "job_name": "示例任务",
+        "run_time": datetime.now(tz).isoformat(),
+        "log": {
+            "log_id": "demo-log",
+            "flow_id": "demo-flow",
+            "succeeded": not failed,
+            "duration": 1.5,
+        },
         "detail": {"source": "webhook-test"},
     }
+    if failed:
+        payload["record"] = {
+            "node_id": "demo-node",
+            "status": "failed",
+            "error": "这是测试通知里的示例错误信息",
+            "skip_reason": None,
+            "duration": 1.5,
+        }
     return APIResponse(data=deliver_once(config, payload))
 
 

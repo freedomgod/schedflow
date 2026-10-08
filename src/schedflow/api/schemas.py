@@ -158,6 +158,18 @@ class VariableUpdateRequest(BaseModel):
     description: str | None = None
 
 
+def _validate_link_base(value: str | None) -> str | None:
+    """Jump links must be absolute, so only http(s) origins are accepted."""
+    if value is None:
+        return None
+    base = value.strip().rstrip("/")
+    if not base:
+        return None
+    if not base.lower().startswith(("http://", "https://")):
+        raise ValueError("link_base 必须是 http(s) 开头的完整地址，例如 https://flow.example.com")
+    return base
+
+
 class WebhookConfigItem(BaseModel):
     url: str
     events: list[str] = Field(default_factory=lambda: ["*"])
@@ -165,6 +177,13 @@ class WebhookConfigItem(BaseModel):
     timeout: float | None = Field(default=None, gt=0)
     #: Delivery target; decides the request envelope and signing.
     platform: Literal["generic", "dingtalk", "wecom", "feishu"] = "generic"
+    #: SchedFlow UI origin used to build the "查看详情" jump link.
+    link_base: str | None = None
+
+    @field_validator("link_base")
+    @classmethod
+    def _check_link_base(cls, value: str | None) -> str | None:
+        return _validate_link_base(value)
 
 
 class WebhooksRequest(BaseModel):
@@ -177,6 +196,12 @@ class WebhookTestRequest(BaseModel):
     secret: str | None = None
     timeout: float | None = Field(default=None, gt=0)
     platform: Literal["generic", "dingtalk", "wecom", "feishu"] | None = None
+    link_base: str | None = None
+
+    @field_validator("link_base")
+    @classmethod
+    def _check_link_base(cls, value: str | None) -> str | None:
+        return _validate_link_base(value)
 
 
 class RateLimitRequest(BaseModel):

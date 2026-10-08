@@ -4,6 +4,11 @@ Deliveries are sent to a chat platform: the internal event payload is only a
 valid request body for ``generic`` targets. DingTalk, WeCom and Feishu each
 expect their own envelope, and they report failures as ``HTTP 200`` with an
 ``errcode``/``code`` field, so the response body is inspected as well.
+
+Chat platforms are rendered as rich messages -- DingTalk ``actionCard``,
+WeCom ``template_card`` (markdown fallback) and Feishu interactive cards --
+so notifications carry a coloured headline, key/value rows and, when
+``link_base`` is configured, a "查看详情" jump into the SchedFlow UI.
 """
 
 from __future__ import annotations
@@ -19,7 +24,8 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from urllib.parse import quote_plus
+from datetime import datetime
+from urllib.parse import quote, quote_plus
 
 from schedflow.core.metrics import counter_inc
 
@@ -56,6 +62,141 @@ EVENT_TITLES = {
 #: Response bodies are only used for diagnostics; keep them short.
 _MAX_RESPONSE_CHARS = 512
 
+#: Severity of an event kind; drives the card accent colour per platform.
+SEVERITY_BY_KIND = {
+    "job.succeeded": "success",
+    "job.completed": "success",
+    "task.executed": "success",
+    "job.failed": "error",
+    "task.error": "error",
+    "scheduler.error": "error",
+    "job.missed": "warning",
+    "job.max_instances": "warning",
+    "job.cancelled": "warning",
+    "job.paused": "warning",
+    "task.skipped": "warning",
+    "task.cancelled": "warning",
+}
+
+#: ``headline`` decoration; keeps the status readable at a glance.
+SEVERITY_MARKS = {
+    "success": "✅",
+    "error": "❌",
+    "warning": "⚠️",
+}
+
+#: Feishu card header colours per severity.
+FEISHU_TEMPLATES = {
+    "success": "green",
+    "error": "red",
+    "warning": "orange",
+    "info": "blue",
+}
+
+#: ``TaskRecord.status`` values rendered in notifications.
+STATUS_LABELS = {
+    "pending": "待执行",
+    "running": "执行中",
+    "succeeded": "成功",
+    "failed": "失败",
+    "skipped": "已跳过",
+    "cancelled": "已取消",
+}
+
+#: WeCom caps ``template_card`` key names at 10 bytes, so long labels are
+#: shortened there only (the markdown/other renderers keep the full wording).
+WECOM_KEY_ALIASES = {
+    "节点耗时": "耗时",
+    "跳过原因": "跳过",
+}
+
+
+def normalize_link_base(value) -> str | None:
+    """Return an absolute ``http(s)`` origin for jump links, else ``None``.
+
+    Notifications must never carry a broken/relative URL, so anything that is
+    not an absolute http(s) address is dropped instead of being sent along.
+    """
+    if not value:
+        return None
+    base = str(value).strip().rstrip("/")
+    if not base.lower().startswith(("http://", "https://")):
+        LOGGER.warning(
+            "webhook link_base %r is not an http(s) URL; jump links disabled",
+            value,
+        )
+        return None
+    return base
+
+
+def job_link(payload: dict, link_base: str | None = None) -> str | None:
+    """Absolute SchedFlow UI URL for the job an event belongs to.
+
+    Job-level events open the workflow detail page; task-level events open the
+    log viewer filtered by job. Returns ``None`` when either the UI origin or
+    the job id is unknown.
+    """
+    base = normalize_link_base(link_base)
+    job_id = payload.get("job_id")
+    if not base or not job_id:
+        return None
+    encoded = quote(str(job_id), safe="")
+    kind = str(payload.get("kind") or "")
+    if kind.startswith("task."):
+        return f"{base}/logs?jobId={encoded}"
+    return f"{base}/jobs/{encoded}"
+
+
+def _format_run_time(value) -> str | None:
+    """Render an ISO run time as ``2026-09-20 16:28:00 +08:00``."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return str(value)
+    stamp = parsed.strftime("%Y-%m-%d %H:%M:%S")
+    offset = parsed.utcoffset()
+    if offset is None:
+        return stamp
+    total = int(offset.total_seconds())
+    sign = "-" if total < 0 else "+"
+    total = abs(total)
+    return f"{stamp} {sign}{total // 3600:02d}:{total % 3600 // 60:02d}"
+
+
+def _format_duration(seconds) -> str:
+    try:
+        value = float(seconds)
+    except (TypeError, ValueError):
+        return str(seconds)
+    if value < 1:
+        return f"{value * 1000:.0f} 毫秒"
+    if value < 60:
+        return f"{value:.2f} 秒"
+    minutes, secs = divmod(int(value), 60)
+    return f"{minutes} 分 {secs} 秒"
+
+
+def _clip_bytes(value, limit: int) -> str:
+    """Truncate to a UTF-8 byte budget.
+
+    WeCom sizes ``template_card`` fields in bytes (24 for the headline, 10 for
+    list keys, ...), so a character count would still get the card rejected.
+    """
+    text = " ".join(str(value).split())
+    raw = text.encode("utf-8")
+    if len(raw) <= limit:
+        return text
+    budget = max(0, limit - len("…".encode()))
+    clipped = raw[:budget]
+    while clipped:
+        try:
+            return clipped.decode("utf-8") + "…"
+        except UnicodeDecodeError:
+            clipped = clipped[:-1]
+    return "…"
+
 
 @dataclass(frozen=True)
 class WebhookConfig:
@@ -65,6 +206,9 @@ class WebhookConfig:
     timeout: float = 5.0
     #: One of :data:`PLATFORMS`; decides the request envelope and signing.
     platform: str = "generic"
+    #: SchedFlow UI origin (e.g. ``https://flow.example.com``) used to build
+    #: the "查看详情" jump link carried by chat notifications.
+    link_base: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> WebhookConfig:
@@ -81,6 +225,7 @@ class WebhookConfig:
             secret=data.get("secret"),
             timeout=float(data.get("timeout") or 5.0),
             platform=platform,
+            link_base=normalize_link_base(data.get("link_base")),
         )
 
     def matches(self, kind: str) -> bool:
@@ -123,42 +268,224 @@ def _shorten(value, limit: int = 400) -> str:
     return text if len(text) <= limit else f"{text[:limit]}…"
 
 
-def notification_text(payload: dict) -> tuple[str, str]:
-    """Turn an event payload into ``(title, plain text body)``.
+@dataclass(frozen=True)
+class WebhookNotice:
+    """Platform-agnostic summary of one event, rendered per delivery target."""
 
-    Plain text keeps the same string usable as DingTalk/WeCom markdown and as
-    Feishu text content.
-    """
+    kind: str
+    #: Card/notification title, e.g. ``SchedFlow · 任务失败``.
+    title: str
+    #: Event name without the product prefix, e.g. ``任务失败``.
+    headline: str
+    #: ``success`` | ``error`` | ``warning`` | ``info``.
+    severity: str
+    fields: tuple[tuple[str, str], ...] = ()
+    notes: tuple[tuple[str, str], ...] = ()
+    link: str | None = None
+    link_label: str = "查看详情"
+
+    @property
+    def marked_headline(self) -> str:
+        mark = SEVERITY_MARKS.get(self.severity)
+        return f"{mark} {self.headline}" if mark else self.headline
+
+
+def build_notice(payload: dict, *, link_base: str | None = None) -> WebhookNotice:
+    """Summarise an event payload into the fields every renderer needs."""
     kind = str(payload.get("kind") or "event")
-    title = f"SchedFlow · {EVENT_TITLES.get(kind, kind)}"
+    headline = EVENT_TITLES.get(kind, kind)
+    severity = SEVERITY_BY_KIND.get(kind, "info")
 
-    lines = [f"事件：{kind}"]
+    fields: list[tuple[str, str]] = [("事件", kind)]
     job_name = payload.get("job_name")
     job_id = payload.get("job_id")
     if job_name and job_id:
-        lines.append(f"任务：{job_name}（{job_id}）")
+        fields.append(("任务", f"{job_name}（{job_id}）"))
     elif job_name or job_id:
-        lines.append(f"任务：{job_name or job_id}")
-    if payload.get("run_time"):
-        lines.append(f"时间：{payload['run_time']}")
+        fields.append(("任务", str(job_name or job_id)))
+    run_time = _format_run_time(payload.get("run_time"))
+    if run_time:
+        fields.append(("时间", run_time))
 
     record = payload.get("record") or {}
     if record.get("node_id"):
-        lines.append(f"节点：{record['node_id']}（{record.get('status')}）")
-    if record.get("error"):
-        lines.append(f"错误：{_shorten(record['error'])}")
-    if record.get("skip_reason"):
-        lines.append(f"跳过原因：{_shorten(record['skip_reason'])}")
+        node = str(record["node_id"])
+        if record.get("status"):
+            node = f"{node}（{STATUS_LABELS.get(str(record['status']), record['status'])}）"
+        fields.append(("节点", node))
 
     log = payload.get("log") or {}
     if log.get("succeeded") is not None:
-        lines.append(f"整体结果：{'成功' if log['succeeded'] else '失败'}")
+        fields.append(("整体结果", "成功" if log["succeeded"] else "失败"))
+    if log.get("duration") is not None:
+        fields.append(("耗时", _format_duration(log["duration"])))
+    if record.get("duration") is not None:
+        fields.append(("节点耗时", _format_duration(record["duration"])))
 
+    notes: list[tuple[str, str]] = []
+    if record.get("error"):
+        notes.append(("错误", _shorten(record["error"])))
+    if record.get("skip_reason"):
+        notes.append(("跳过原因", _shorten(record["skip_reason"])))
     detail = payload.get("detail")
     if isinstance(detail, dict) and detail.get("error"):
-        lines.append(f"错误：{_shorten(detail['error'])}")
+        notes.append(("错误", _shorten(detail["error"])))
+    elif isinstance(detail, str) and detail:
+        notes.append(("详情", _shorten(detail)))
 
-    return title, "\n".join(lines)
+    return WebhookNotice(
+        kind=kind,
+        title=f"SchedFlow · {headline}",
+        headline=headline,
+        severity=severity,
+        fields=tuple(fields),
+        notes=tuple(notes),
+        link=job_link(payload, link_base),
+    )
+
+
+def notification_text(
+    payload: dict, *, link_base: str | None = None
+) -> tuple[str, str]:
+    """Turn an event payload into ``(title, plain text body)``.
+
+    Kept for log-less targets and callers that only need a text rendering.
+    """
+    notice = build_notice(payload, link_base=link_base)
+    lines = [
+        f"{label}：{value}" for label, value in (*notice.fields, *notice.notes)
+    ]
+    if notice.link:
+        lines.append(f"{notice.link_label}：{notice.link}")
+    return notice.title, "\n".join(lines)
+
+
+def _markdown_lines(notice: WebhookNotice, *, bullet: bool) -> list[str]:
+    prefix = "- " if bullet else ""
+    lines = [f"### {notice.marked_headline}"]
+    lines += [f"{prefix}**{label}**：{value}" for label, value in notice.fields]
+    lines += [f"> **{label}**：{value}" for label, value in notice.notes]
+    return lines
+
+
+def _dingtalk_body(notice: WebhookNotice) -> dict:
+    """DingTalk 群机器人：actionCard，正文为 markdown，链接做成跳转按钮。"""
+    lines = _markdown_lines(notice, bullet=True)
+    card: dict = {"title": notice.title, "text": "\n".join(lines)}
+    if notice.link:
+        card["text"] = "\n".join(
+            [*lines, "", f"[{notice.link_label}]({notice.link})"]
+        )
+        card["btnOrientation"] = "0"
+        card["singleTitle"] = notice.link_label
+        card["singleURL"] = notice.link
+    return {"msgtype": "actionCard", "actionCard": card}
+
+
+def _wecom_markdown_body(notice: WebhookNotice) -> dict:
+    """企业微信 markdown：标题 + 键值行 + 引用，链接用 markdown 语法。"""
+    lines = _markdown_lines(notice, bullet=False)
+    if notice.link:
+        lines += ["", f"[{notice.link_label}]({notice.link})"]
+    return {"msgtype": "markdown", "markdown": {"content": "\n".join(lines)}}
+
+
+def _wecom_card_body(notice: WebhookNotice) -> dict:
+    """企业微信模板卡片（文本通知型）。
+
+    卡片必须带 ``card_action``，所以只有存在跳转链接时才使用；字段长度按
+    平台的**字节**限制裁剪，避免平台以 ``errcode`` 拒收。
+    """
+    # ``main_title.desc`` already carries the event kind, and the outcome is
+    # promoted to ``emphasis_content``, so neither needs a list row.
+    rows = [
+        {
+            "keyname": _clip_bytes(WECOM_KEY_ALIASES.get(label, label), 10),
+            "value": _clip_bytes(value, 30),
+        }
+        for label, value in notice.fields
+        if label not in ("事件", "整体结果")
+    ][:6]
+    card: dict = {
+        "card_type": "text_notice",
+        "source": {"desc": "SchedFlow", "desc_color": 0},
+        "main_title": {
+            "title": _clip_bytes(notice.marked_headline, 24),
+            "desc": _clip_bytes(notice.kind, 30),
+        },
+        "card_action": {"type": 1, "url": notice.link},
+        "jump_list": [
+            {
+                "type": 1,
+                "url": notice.link,
+                "title": _clip_bytes("详情", 10),
+            }
+        ],
+    }
+    result = dict(notice.fields).get("整体结果")
+    if result:
+        card["emphasis_content"] = {"title": _clip_bytes(result, 10), "desc": "结果"}
+    if rows:
+        card["horizontal_content_list"] = rows
+    notes = "；".join(f"{label}：{value}" for label, value in notice.notes)
+    if notes:
+        card["sub_title_text"] = _clip_bytes(notes, 112)
+    return {"msgtype": "template_card", "template_card": card}
+
+
+def _feishu_body(notice: WebhookNotice) -> dict:
+    """飞书自定义机器人：interactive 卡片，标题栏按结果着色。"""
+    elements: list[dict] = []
+    if notice.fields:
+        elements.append(
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": "\n".join(
+                        f"**{label}**：{value}" for label, value in notice.fields
+                    ),
+                },
+            }
+        )
+    if notice.notes:
+        elements.append({"tag": "hr"})
+        elements.append(
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": "\n".join(
+                        f"**{label}**：{value}" for label, value in notice.notes
+                    ),
+                },
+            }
+        )
+    if notice.link:
+        elements.append(
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": notice.link_label},
+                        "type": "primary",
+                        "url": notice.link,
+                    }
+                ],
+            }
+        )
+    return {
+        "msg_type": "interactive",
+        "card": {
+            "config": {"wide_screen_mode": True},
+            "header": {
+                "template": FEISHU_TEMPLATES.get(notice.severity, "blue"),
+                "title": {"tag": "plain_text", "content": notice.title},
+            },
+            "elements": elements,
+        },
+    }
 
 
 def build_request_body(
@@ -172,19 +499,18 @@ def build_request_body(
     if config.platform == "generic":
         return payload
 
-    title, body = notification_text(payload)
+    notice = build_notice(payload, link_base=config.link_base)
     if config.platform == "dingtalk":
-        return {
-            "msgtype": "markdown",
-            "markdown": {"title": title, "text": f"### {title}\n\n{body}"},
-        }
+        return _dingtalk_body(notice)
     if config.platform == "wecom":
-        return {
-            "msgtype": "markdown",
-            "markdown": {"content": f"### {title}\n{body}"},
-        }
+        # 模板卡片必须带 card_action（跳转地址）；没有链接时退回 markdown。
+        return (
+            _wecom_card_body(notice)
+            if notice.link
+            else _wecom_markdown_body(notice)
+        )
 
-    body_dict: dict = {"msg_type": "text", "content": {"text": f"{title}\n{body}"}}
+    body_dict: dict = _feishu_body(notice)
     if config.platform == "feishu" and config.secret and timestamp_s is not None:
         body_dict["timestamp"] = str(timestamp_s)
         body_dict["sign"] = feishu_sign(timestamp_s, config.secret)
