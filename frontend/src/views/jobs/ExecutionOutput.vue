@@ -131,13 +131,13 @@ function copyContent(text: string) {
 }
 
 .eo-content-stdout {
-  background: #1e1e1e;
-  color: #4ec9b0;
+  background: var(--code-bg);
+  color: var(--code-text);
 }
 
 .eo-content-stderr {
-  background: #1e1e1e;
-  color: #f14c4c;
+  background: var(--code-bg);
+  color: var(--code-error);
 }
 
 .eo-content-error {

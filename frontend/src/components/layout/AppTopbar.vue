@@ -1,7 +1,7 @@
 <template>
   <header class="app-topbar">
     <div class="topbar-left">
-      <span class="page-title">{{ title }}</span>
+      <span class="topbar-title">{{ title }}</span>
     </div>
     <div class="topbar-right">
       <!-- Scheduler status pill: click to toggle pause/resume/start -->
@@ -9,6 +9,7 @@
         class="status-pill"
         :class="statusPillClass"
         :title="statusActionTitle"
+        :aria-label="`${statusLabel}，${statusActionTitle}`"
         :disabled="schedulerStore.busy"
         @click="toggleScheduler"
       >
@@ -21,7 +22,7 @@
       </button>
 
       <!-- Theme toggle -->
-      <button class="topbar-icon-btn" @click="toggleTheme" :title="settingsStore.theme === 'dark' ? '切换到明亮模式' : '切换到暗黑模式'">
+      <button class="topbar-icon-btn" @click="toggleTheme" :title="settingsStore.theme === 'dark' ? '切换到明亮模式' : '切换到暗黑模式'" :aria-label="settingsStore.theme === 'dark' ? '切换到明亮模式' : '切换到暗黑模式'">
         <!-- Sun icon (shown in dark mode → click to switch to light) -->
         <svg v-if="settingsStore.theme === 'dark'" width="18" height="18" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5"/>
@@ -119,7 +120,7 @@ function toggleTheme() {
   align-items: center;
 }
 
-.page-title {
+.topbar-title {
   font-family: var(--font-heading);
   font-size: 15px;
   font-weight: 600;
@@ -139,6 +140,7 @@ function toggleTheme() {
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
+  min-height: 34px;
   border-radius: var(--radius-full);
   font-size: 12px;
   font-weight: 500;
@@ -205,8 +207,8 @@ function toggleTheme() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -224,6 +226,10 @@ function toggleTheme() {
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .logout-btn {
@@ -233,6 +239,7 @@ function toggleTheme() {
   color: var(--text-muted);
   cursor: pointer;
   padding: 4px 8px;
+  min-height: 36px;
   border-radius: var(--radius-sm);
   transition: color var(--transition-fast), background var(--transition-fast);
   font-family: var(--font-body);
@@ -240,5 +247,16 @@ function toggleTheme() {
 .logout-btn:hover {
   color: var(--color-danger);
   background: var(--color-danger-soft);
+}
+
+@media (max-width: 900px) { .app-topbar { padding: 0 24px; } }
+@media (max-width: 600px) {
+  .app-topbar { padding: 0 12px; gap: 8px; }
+  .topbar-title { font-size: 14px; white-space: nowrap; }
+  .topbar-right { gap: 4px; }
+  .status-pill { padding: 4px 8px; }
+  .user-name, .topbar-divider { display: none; }
+  .topbar-icon-btn { width: 34px; }
+  .logout-btn { font-size: 12px; padding: 4px; }
 }
 </style>

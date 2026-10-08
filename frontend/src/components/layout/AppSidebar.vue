@@ -18,7 +18,8 @@
     </router-link>
 
     <!-- Navigation -->
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" aria-label="主导航">
+      <span class="nav-section">工作空间</span>
       <router-link to="/dashboard" class="nav-item" :class="{ active: isActive('/dashboard') }" title="仪表盘">
         <span class="nav-icon">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="2" width="7" height="4" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="8" width="7" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -72,8 +73,9 @@
 
     <!-- Bottom section -->
     <div class="sidebar-footer">
+      <span v-show="!isCollapsed" class="sidebar-caption">工作流调度控制台</span>
       <!-- Collapse toggle -->
-      <button class="collapse-btn" @click="isCollapsed = !isCollapsed" :title="isCollapsed ? '展开侧栏' : '收起侧栏'">
+      <button class="collapse-btn" @click="isCollapsed = !isCollapsed" :title="isCollapsed ? '展开侧栏' : '收起侧栏'" :aria-label="isCollapsed ? '展开侧栏' : '收起侧栏'" :aria-expanded="!isCollapsed">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" :class="{ rotated: isCollapsed }">
           <path d="M7 4L11.5 9L7 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -83,11 +85,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const isCollapsed = ref(false)
+const isCollapsed = defineModel<boolean>('collapsed', { default: false })
 
 function isActive(path: string) {
   const r = route.path
@@ -104,6 +105,7 @@ function isActive(path: string) {
 .app-sidebar {
   width: var(--sidebar-width);
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--glass-bg);
@@ -147,9 +149,9 @@ function isActive(path: string) {
 
 .logo-text {
   font-family: var(--font-heading);
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 700;
-  background: linear-gradient(135deg, #60A5FA, #818CF8);
+  background: linear-gradient(135deg, var(--color-primary-text), var(--color-info));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -159,10 +161,10 @@ function isActive(path: string) {
 /* ── Navigation ──── */
 .sidebar-nav {
   flex: 1;
-  padding: var(--space-sm);
+  padding: 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -171,7 +173,8 @@ function isActive(path: string) {
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 42px;
+  min-height: 44px;
+  flex-shrink: 0;
   padding: 0 14px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
@@ -195,7 +198,7 @@ function isActive(path: string) {
 }
 
 .nav-item.active {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   background: var(--color-primary-soft);
 }
 
@@ -223,8 +226,18 @@ function isActive(path: string) {
 }
 
 .nav-label {
-  font-size: 13.5px;
+  font-size: 14px;
 }
+
+.nav-section {
+  padding: 4px 14px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.collapsed .nav-section { display: none; }
+.sidebar-caption { font-size: 12px; color: var(--text-muted); }
 
 /* ── Footer ──────── */
 .sidebar-footer {
@@ -232,7 +245,7 @@ function isActive(path: string) {
   border-top: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   flex-shrink: 0;
   min-height: 48px;
 }
@@ -245,8 +258,8 @@ function isActive(path: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
@@ -267,5 +280,13 @@ function isActive(path: string) {
 
 .collapse-btn svg.rotated {
   transform: rotate(180deg);
+}
+
+@media (max-width: 900px) {
+  .app-sidebar { width: var(--sidebar-collapsed-width); }
+  .sidebar-logo, .collapsed .sidebar-logo { padding: 0; justify-content: center; }
+  .logo-text, .nav-label, .nav-section, .nav-indicator, .sidebar-footer { display: none; }
+  .sidebar-nav { padding: 16px 8px; }
+  .nav-item { padding: 0; justify-content: center; }
 }
 </style>

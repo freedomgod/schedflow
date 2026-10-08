@@ -1,6 +1,7 @@
 <template>
   <div class="system-settings page-wrapper">
     <h1 class="page-title gradient-text">系统设置</h1>
+    <p class="page-description">管理界面偏好、全局变量与访问设置。</p>
 
     <div class="settings-tabs">
       <button
@@ -278,7 +279,7 @@ onMounted(() => {
   transition: all var(--transition-fast);
 }
 .settings-tab:hover { color: var(--text-secondary); }
-.settings-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.settings-tab.active { color: var(--color-primary-text); border-bottom-color: var(--color-primary); }
 
 .tab-content { min-height: 200px; }
 
@@ -327,4 +328,10 @@ onMounted(() => {
 .theme-preview-dark { background: #1E293B; color: #818CF8; }
 .theme-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .theme-desc { font-size: 12px; color: var(--text-muted); }
+.settings-tab { white-space: nowrap; }
+.theme-card { border-radius: var(--radius-md); }
+@media (max-width: 600px) {
+  .theme-cards { grid-template-columns: minmax(0, 1fr); }
+  .tab-content > .glass-card { padding: 20px 16px !important; }
+}
 </style>

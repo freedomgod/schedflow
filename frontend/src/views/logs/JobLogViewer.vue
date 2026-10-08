@@ -1,10 +1,7 @@
 <template>
   <div class="log-viewer">
-    <el-page-header @back="$router.push('/jobs')">
-      <template #content>
-        <span>任务日志 - {{ currentJobName || '请选择任务' }}</span>
-      </template>
-    </el-page-header>
+    <h1 class="page-title gradient-text">任务日志</h1>
+    <p class="page-description">{{ currentJobName ? `查看「${currentJobName}」的执行记录与节点结果。` : '选择工作流，追踪每次执行和节点结果。' }}</p>
 
     <div class="viewer-container">
       <!-- 左栏：任务选择 -->
@@ -156,14 +153,15 @@ watch(() => route.query.jobId, (jobId) => {
 .log-viewer {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 100px);
+  height: 100%;
+  min-height: 640px;
   padding: var(--space-lg) var(--space-xl);
 }
 
 .viewer-container {
   display: flex;
   flex: 1;
-  margin-top: var(--space-md);
+  min-height: 0;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -171,7 +169,7 @@ watch(() => route.query.jobId, (jobId) => {
 }
 
 .viewer-left {
-  width: 220px;
+  width: clamp(170px, 18%, 240px);
   flex-shrink: 0;
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
@@ -179,7 +177,7 @@ watch(() => route.query.jobId, (jobId) => {
 }
 
 .viewer-middle {
-  width: 300px;
+  width: clamp(200px, 23%, 300px);
   flex-shrink: 0;
   background: var(--bg-base);
   border-right: 1px solid var(--glass-border);
@@ -206,14 +204,29 @@ watch(() => route.query.jobId, (jobId) => {
   position: absolute;
   top: 0;
   right: 0;
-  width: 480px;
+  width: min(480px, 100%);
   height: 100%;
-  background: var(--glass-bg);
+  background: var(--glass-panel-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-left: 1px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   z-index: 100;
   overflow-y: auto;
+}
+
+@media (max-width: 1100px) {
+  .log-viewer { height: auto; min-height: calc(100dvh - var(--topbar-height)); }
+  .viewer-container { display: grid; flex: none; min-height: 622px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-rows: 220px minmax(400px, 1fr); }
+  .viewer-left, .viewer-middle { width: auto; min-width: 0; }
+  .viewer-middle { border-right: none; }
+  .viewer-right { grid-column: 1 / -1; border-top: 1px solid var(--glass-border); }
+}
+@media (max-width: 900px) { .log-viewer { padding: 24px; } }
+@media (max-width: 600px) {
+  .log-viewer { padding: 20px 16px; height: auto; min-height: 0; }
+  .viewer-container { min-height: 802px; grid-template-columns: minmax(0, 1fr); grid-template-rows: 180px 220px 400px; }
+  .viewer-middle { border-top: 1px solid var(--glass-border); }
+  .viewer-left { border-right: none; }
 }
 </style>

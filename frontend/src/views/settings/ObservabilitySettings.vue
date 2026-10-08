@@ -1,6 +1,7 @@
 <template>
   <div class="page-wrapper integration-settings">
     <h1 class="page-title gradient-text">集成</h1>
+    <p class="page-description">连接通知平台，及时获取工作流与调度器事件。</p>
 
     <div class="glass-card settings-card">
       <h3 class="section-title">Webhook 通知</h3>
@@ -337,9 +338,6 @@ onMounted(load)
 
 <style scoped>
 .integration-settings {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
   max-width: 960px;
 }
 
@@ -448,7 +446,7 @@ onMounted(load)
 
 .result-body {
   font-family: 'Fira Code', monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   word-break: break-all;
 }
@@ -458,5 +456,12 @@ onMounted(load)
   justify-content: flex-end;
   gap: 8px;
   margin-top: var(--space-md);
+}
+.webhook-card { border-radius: var(--radius-md); }
+.platform-btn.active { color: var(--color-primary-text); }
+@media (max-width: 600px) {
+  .platform-picker { flex-wrap: wrap; }
+  .webhook-card { padding: 16px; }
+  .settings-actions, .webhook-actions { flex-wrap: wrap; gap: 12px; }
 }
 </style>

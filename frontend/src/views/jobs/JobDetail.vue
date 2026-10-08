@@ -429,7 +429,7 @@ onBeforeUnmount(() => { stopSSE() })
 .edit-tabs { display: flex; border-bottom: 1px solid var(--border-subtle); padding: 0 var(--space-md); }
 .edit-tab { padding: 14px 20px; border: none; background: none; color: var(--text-muted); font-size: 13px; font-weight: 500; font-family: var(--font-body); cursor: pointer; border-bottom: 2px solid transparent; transition: all var(--transition-fast); }
 .edit-tab:hover { color: var(--text-secondary); }
-.edit-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.edit-tab.active { color: var(--color-primary-text); border-bottom-color: var(--color-primary); }
 
 .tab-panel { padding: var(--space-lg); }
 .tab-dag-panel { height: 480px; }
@@ -449,7 +449,7 @@ select.form-input { cursor: pointer; }
 /* Desc editor */
 .desc-editor-toolbar { display: flex; gap: 4px; margin-bottom: 8px; }
 .mode-btn { padding: 4px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-surface); color: var(--text-muted); font-size: 12px; font-family: var(--font-body); cursor: pointer; transition: all var(--transition-fast); }
-.mode-btn.active { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary); }
+.mode-btn.active { background: var(--color-primary-soft); color: var(--color-primary-text); border-color: var(--color-primary); }
 
 .detail-run-actions { display: flex; align-items: center; gap: 10px; }
 .run-state { font-size: 12px; color: var(--text-muted); }
@@ -461,5 +461,14 @@ select.form-input { cursor: pointer; }
   .detail-grid { grid-template-columns: 1fr; }
   .detail-header { flex-wrap: wrap; }
   .form-grid, .form-grid-3 { grid-template-columns: 1fr; }
+}
+.header-actions { flex-wrap: wrap; }
+.config-link { color: var(--color-primary-text); }
+@media (max-width: 600px) {
+  .detail-header { flex-wrap: wrap; padding: 16px; gap: 12px; }
+  .header-actions { width: 100%; }
+  .header-id { overflow-wrap: anywhere; }
+  .info-card, .edit-card { padding: 20px 16px; }
+  .detail-run-actions { flex-wrap: wrap; }
 }
 </style>

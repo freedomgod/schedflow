@@ -90,9 +90,9 @@ function kwargTypeTag(type: string): string {
   position: absolute;
   top: 0;
   right: 0;
-  width: 360px;
+  width: min(360px, 100%);
   height: 100%;
-  background: var(--el-bg-color, #fff);
+  background: var(--glass-panel-bg);
   border-left: 1px solid var(--el-border-color);
   box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
   z-index: 100;
@@ -159,8 +159,8 @@ function kwargTypeTag(type: string): string {
 }
 
 .code-block {
-  background: #1e1e1e;
-  color: #4ec9b0;
+  background: var(--code-bg);
+  color: var(--code-text);
   padding: 8px 12px;
   border-radius: 4px;
   font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;

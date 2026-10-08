@@ -6,8 +6,13 @@
       v-for="(log, index) in logs"
       :key="log.flow_log_id"
       class="execution-item"
+      role="button"
+      tabindex="0"
+      :aria-pressed="selectedIndex === index"
       :class="{ 'is-active': selectedIndex === index }"
       @click="$emit('select', index)"
+      @keydown.enter="$emit('select', index)"
+      @keydown.space.prevent="$emit('select', index)"
     >
       <div class="execution-time">
         {{ log.start_time ? new Date(log.start_time).toLocaleString() : '-' }}
@@ -62,8 +67,7 @@ function skippedCount(log: ExecutionLog): number {
   height: 100%;
   overflow-y: auto;
   padding: 12px;
-  background: var(--el-fill-color-lighter, #fafafa);
-  border-right: 1px solid var(--el-border-color, #e4e7ed);
+  background: transparent;
 }
 
 .execution-list-title {
@@ -80,11 +84,11 @@ function skippedCount(log: ExecutionLog): number {
 }
 
 .execution-item {
-  padding: 10px 12px;
-  margin-bottom: 6px;
-  background: var(--el-bg-color, #fff);
-  border: 1px solid var(--el-border-color, #e4e7ed);
-  border-radius: 6px;
+  padding: 14px 12px;
+  margin-bottom: 10px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: border-color 0.2s;
 }
@@ -105,7 +109,7 @@ function skippedCount(log: ExecutionLog): number {
 }
 
 .execution-id {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--el-text-color-secondary);
   margin-top: 2px;
 }
@@ -120,13 +124,13 @@ function skippedCount(log: ExecutionLog): number {
 .resume-tag {
   padding: 1px 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--el-color-warning, #e6a23c);
   background: rgba(230, 162, 60, 0.12);
 }
 
 .resume-from {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--el-text-color-secondary);
 }
 
@@ -152,8 +156,10 @@ function skippedCount(log: ExecutionLog): number {
 }
 
 .execution-duration {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--el-text-color-secondary);
   margin-top: 4px;
 }
+.execution-id, .resume-from { overflow-wrap: anywhere; }
+.execution-summary { display: flex; flex-wrap: wrap; gap: 4px; line-height: 1.6; }
 </style>

@@ -92,13 +92,15 @@ async function handleLogin() {
 
 <style scoped>
 .auth-wrapper {
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 32px 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-deep);
   position: relative;
-  overflow: hidden;
+  overflow: hidden auto;
 }
 
 /* ── BG Dots Pattern ── */
@@ -220,7 +222,7 @@ async function handleLogin() {
   margin-top: 4px;
   border: none;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--color-primary), #6366F1);
+  background: linear-gradient(135deg, var(--color-primary-button), var(--color-primary-button-hover));
   color: white;
   font-size: 15px;
   font-weight: 600;
@@ -264,5 +266,11 @@ async function handleLogin() {
 
 @media (prefers-reduced-motion: reduce) {
   .auth-blob { animation: none; }
+}
+.auth-card { background: var(--glass-panel-bg); box-shadow: var(--shadow-lg); }
+.auth-title { font-size: 26px; letter-spacing: -0.03em; }
+.form-input { min-height: 44px; }
+@media (max-width: 600px) {
+  .auth-card { padding: 32px 24px; max-width: 100%; }
 }
 </style>

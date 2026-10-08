@@ -5,7 +5,7 @@
         <!-- Header -->
         <div class="form-overlay-header">
           <h2 class="form-overlay-title">{{ isEdit ? '编辑工作流' : '创建工作流' }}</h2>
-          <button class="close-btn" @click="$emit('update:visible', false)">
+          <button class="close-btn" aria-label="关闭工作流表单" @click="$emit('update:visible', false)">
             <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><line x1="5" y1="5" x2="15" y2="15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="15" y1="5" x2="5" y2="15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           </button>
         </div>
@@ -199,7 +199,7 @@ defineExpose({ fillFromJob })
 </script>
 
 <style scoped>
-.form-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: var(--sidebar-width); z-index: 100; background: rgba(0,0,0,0.45); backdrop-filter: blur(6px); display: flex; }
+.form-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: var(--layout-sidebar-width, var(--sidebar-width)); z-index: 100; background: rgba(0,0,0,0.45); backdrop-filter: blur(6px); display: flex; }
 html:not(.dark) .form-overlay { background: rgba(0,0,0,0.15); }
 .form-overlay-panel { flex: 1; display: flex; flex-direction: column; max-width: 100%; }
 
@@ -213,7 +213,7 @@ html:not(.dark) .form-overlay { background: rgba(0,0,0,0.15); }
 .form-tabs { display: flex; padding: 0 24px; border-bottom: 1px solid var(--border-subtle); }
 .form-tab { padding: 12px 18px; border: none; background: none; color: var(--text-muted); font-size: 13px; font-weight: 500; font-family: var(--font-body); cursor: pointer; border-bottom: 2px solid transparent; transition: all var(--transition-fast); }
 .form-tab:hover { color: var(--text-secondary); }
-.form-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.form-tab.active { color: var(--color-primary-text); border-bottom-color: var(--color-primary); }
 
 .tab-panel { padding: 24px; max-width: 860px; }
 .tab-dag-panel { max-width: none; height: calc(100vh - 240px); }
@@ -232,27 +232,26 @@ html:not(.dark) .form-overlay { background: rgba(0,0,0,0.15); }
 .form-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
 select.form-input { cursor: pointer; }
 .form-textarea { resize: vertical; min-height: 80px; }
-.code-input { font-family: 'Fira Code', monospace; font-size: 13px; background: rgba(0,0,0,0.2); color: #4ec9b0; }
-.field-hint { font-size: 11px; color: var(--text-muted); }
-.field-hint a { color: var(--color-primary); }
+.code-input { font-family: 'Fira Code', monospace; font-size: 13px; background: var(--code-bg); color: var(--code-text); }
+.field-hint { font-size: 12px; color: var(--text-muted); }
+.field-hint a { color: var(--color-primary-text); }
 .form-hint { font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-top: var(--space-md); padding: 10px 14px; background: var(--bg-surface); border-radius: var(--radius-sm); border-left: 3px solid var(--color-primary); }
 .form-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0 14px; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .form-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-subtle); }
 
 /* Buttons */
-.btn-primary { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border: none; border-radius: var(--radius-md); background: var(--color-primary); color: white; font-size: 13px; font-weight: 600; font-family: var(--font-body); cursor: pointer; transition: all var(--transition-fast); }
-.btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); box-shadow: var(--shadow-glow); }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface); color: var(--text-secondary); font-size: 13px; font-weight: 500; font-family: var(--font-body); cursor: pointer; transition: all var(--transition-fast); }
 .btn-ghost:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
 .btn-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Toggle */
-.toggle-switch { position: relative; width: 40px; height: 22px; border-radius: 11px; border: none; background: var(--border-default); cursor: pointer; transition: background var(--transition-fast); flex-shrink: 0; }
-.toggle-switch.active { background: var(--color-success); }
-.toggle-switch .toggle-thumb { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: white; transition: transform var(--transition-fast); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 
 .overlay-fade-enter-active, .overlay-fade-leave-active { transition: opacity var(--transition-slow); }
 .overlay-fade-enter-from, .overlay-fade-leave-to { opacity: 0; }
+@media (max-width: 600px) {
+  .form-grid, .form-grid-3 { grid-template-columns: minmax(0, 1fr); }
+  .tab-panel { padding: 20px 16px; }
+  .form-input { min-width: 0; }
+}
 </style>

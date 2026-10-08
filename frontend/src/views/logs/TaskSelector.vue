@@ -10,10 +10,12 @@
       />
     </div>
     <div class="selector-list" v-loading="loading">
-      <div
+      <button
         v-for="job in filteredJobs"
         :key="job.id"
         class="task-item"
+        type="button"
+        :aria-pressed="job.id === activeJobId"
         :class="{ 'is-active': job.id === activeJobId }"
         @click="$emit('select', job.id, job.name)"
       >
@@ -22,7 +24,7 @@
           :class="job.job_status === 'RUNNING' ? 'running' : 'paused'"
         ></span>
         <span class="task-name">{{ job.name }}</span>
-      </div>
+      </button>
       <el-empty v-if="!loading && filteredJobs.length === 0" description="无匹配任务" />
     </div>
   </div>
@@ -71,7 +73,7 @@ defineExpose({ refresh: fetchJobs })
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--el-fill-color-lighter, #fafafa);
+  background: transparent;
 }
 
 .selector-header {
@@ -89,11 +91,18 @@ defineExpose({ refresh: fetchJobs })
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  margin-bottom: 2px;
-  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 4px;
+  width: 100%;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  text-align: left;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   transition: background 0.15s;
 }
 
@@ -102,7 +111,7 @@ defineExpose({ refresh: fetchJobs })
 }
 
 .task-item.is-active {
-  background: var(--el-color-primary-light-7, #d9ecff);
+  background: var(--color-primary-soft);
   color: var(--el-color-primary, #409eff);
   font-weight: 500;
 }
@@ -126,5 +135,6 @@ defineExpose({ refresh: fetchJobs })
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 </style>

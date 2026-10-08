@@ -305,8 +305,8 @@ function handleDelete() {
 .code-input :deep(textarea) {
   font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
   font-size: 13px;
-  background: #1e1e1e;
-  color: #4ec9b0;
+  background: var(--code-bg);
+  color: var(--code-text);
 }
 
 .kwargs-table {

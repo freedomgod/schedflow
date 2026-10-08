@@ -56,7 +56,7 @@
       <div class="skeleton" v-for="n in 4" :key="n" style="height: 100px; border-radius: var(--radius-lg);"></div>
     </div>
     <div v-else class="stats-grid">
-      <div class="stat-card glass-card-interactive" style="animation-delay: 0s">
+      <div class="stat-card glass-card" style="animation-delay: 0s">
         <div class="stat-icon-wrapper" style="background: var(--color-primary-soft);">
           <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
             <rect x="2" y="2" width="7" height="7" rx="1.5" stroke="var(--color-primary)" stroke-width="1.5"/>
@@ -74,7 +74,7 @@
         </div>
       </div>
 
-      <div class="stat-card glass-card-interactive" style="animation-delay: 0.08s">
+      <div class="stat-card glass-card" style="animation-delay: 0.08s">
         <div class="stat-icon-wrapper" style="background: var(--color-success-soft);">
           <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
             <rect x="2" y="2" width="16" height="16" rx="2" stroke="var(--color-success)" stroke-width="1.5"/>
@@ -88,7 +88,7 @@
         </div>
       </div>
 
-      <div class="stat-card glass-card-interactive" style="animation-delay: 0.16s">
+      <div class="stat-card glass-card" style="animation-delay: 0.16s">
         <div class="stat-icon-wrapper" style="background: var(--color-warning-soft);">
           <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
             <polygon points="10,3 18,17 2,17" stroke="var(--color-warning)" stroke-width="1.5" stroke-linejoin="round"/>
@@ -100,7 +100,7 @@
         </div>
       </div>
 
-      <div class="stat-card glass-card-interactive" style="animation-delay: 0.24s">
+      <div class="stat-card glass-card" style="animation-delay: 0.24s">
         <div class="stat-icon-wrapper" style="background: var(--color-info-soft);">
           <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
             <rect x="3" y="4" width="4" height="12" rx="1" stroke="var(--color-info)" stroke-width="1.5"/>
@@ -126,12 +126,12 @@
           <div class="skeleton" v-for="n in 4" :key="n" style="height: 52px; margin-bottom: 8px;"></div>
         </template>
         <template v-else-if="recentJobs.length > 0">
-          <div
+          <router-link
             v-for="(job, i) in recentJobs"
             :key="job.id"
             class="job-list-item"
             :style="{ animationDelay: (0.3 + i * 0.06) + 's' }"
-            @click="$router.push(`/jobs/${job.id}`)"
+            :to="`/jobs/${job.id}`"
           >
             <div class="job-list-left">
               <span class="job-list-name">{{ job.name }}</span>
@@ -145,7 +145,7 @@
                 {{ formatTime(job.next_run_time) }}
               </span>
             </div>
-          </div>
+          </router-link>
         </template>
         <div v-else class="empty-state">
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none" opacity="0.3">
@@ -339,13 +339,13 @@ onBeforeUnmount(() => {
 .alert-title {
   font-size: 13px;
   font-weight: 600;
-  color: #FCA5A5;
+  color: var(--color-danger);
   margin-bottom: 2px;
 }
 
 .alert-desc {
   font-size: 12px;
-  color: rgba(239, 68, 68, 0.8);
+  color: var(--color-danger);
   word-break: break-all;
 }
 
@@ -353,7 +353,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   background: none;
   border: none;
-  color: rgba(239, 68, 68, 0.6);
+  color: var(--color-danger);
   font-size: 18px;
   cursor: pointer;
   padding: 0 4px;
@@ -376,7 +376,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px;
+  padding: 24px 20px;
+  min-height: 114px;
   animation: card-in 0.4s ease both;
 }
 
@@ -396,7 +397,8 @@ onBeforeUnmount(() => {
 
 .stat-value {
   font-family: var(--font-heading);
-  font-size: 22px;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.2;
@@ -413,7 +415,7 @@ onBeforeUnmount(() => {
 /* ── Dashboard Grid ─ */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: var(--space-md);
 }
 
@@ -425,7 +427,7 @@ onBeforeUnmount(() => {
 
 .section-link {
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   text-decoration: none;
   font-weight: 500;
   transition: color var(--transition-fast);
@@ -438,10 +440,12 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 0;
+  padding: 14px 12px;
+  text-decoration: none;
+  gap: 12px;
   border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
-  transition: padding var(--transition-fast), background var(--transition-fast);
+  transition: background var(--transition-fast);
   animation: card-in 0.35s ease both;
   border-radius: var(--radius-sm);
 }
@@ -450,8 +454,6 @@ onBeforeUnmount(() => {
 }
 .job-list-item:hover {
   background: var(--bg-surface);
-  padding: 12px 12px;
-  margin: 0 -12px;
   border-radius: var(--radius-sm);
 }
 
@@ -459,11 +461,15 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 .job-list-name {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .job-list-meta {
   font-size: 12px;
@@ -476,7 +482,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .job-status-badge {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   padding: 3px 8px;
   border-radius: var(--radius-full);
@@ -496,6 +502,7 @@ onBeforeUnmount(() => {
 
 /* ── Quick Actions ─ */
 .quick-actions-card {
+  align-self: start;
   padding: var(--space-lg);
   animation: card-in 0.4s ease 0.36s both;
 }
@@ -557,7 +564,7 @@ onBeforeUnmount(() => {
 }
 
 .empty-cta {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
@@ -576,7 +583,7 @@ onBeforeUnmount(() => {
     grid-template-columns: repeat(2, 1fr);
   }
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 768px) {
@@ -586,5 +593,15 @@ onBeforeUnmount(() => {
   .quick-actions-grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+@media (max-width: 600px) {
+  .welcome-section { flex-direction: column; gap: 8px; align-items: flex-start; }
+  .welcome-title { font-size: 26px; }
+  .welcome-time { font-size: 12px; padding-top: 0; }
+  .recent-jobs-card, .quick-actions-card { padding: 20px 16px; }
+  .job-list-item { padding: 14px 0; }
+  .job-list-right { flex-direction: column; align-items: flex-end; gap: 6px; }
+  .stat-value { font-size: 26px; }
 }
 </style>

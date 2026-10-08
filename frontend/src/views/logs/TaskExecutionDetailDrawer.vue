@@ -2,7 +2,7 @@
   <div class="execution-detail">
     <div class="panel-header">
       <span class="panel-title">节点执行详情</span>
-      <el-button :icon="Close" text size="small" @click="emit('update:visible', false)" />
+      <el-button :icon="Close" text size="small" aria-label="关闭节点执行详情" @click="emit('update:visible', false)" />
     </div>
     <div class="panel-body">
       <template v-if="record">
@@ -230,19 +230,19 @@ function copyContent(text: string) {
 }
 
 .cell-pre-stdout {
-  background: #1e1e1e;
-  color: #4ec9b0;
+  background: var(--code-bg);
+  color: var(--code-text);
 }
 
 .cell-pre-stderr {
-  background: #1e1e1e;
-  color: #f14c4c;
+  background: var(--code-bg);
+  color: var(--code-error);
 }
 
 .cell-pre-error {
   background: var(--el-color-danger-light-9, #fef0f0);
   color: var(--el-color-danger, #f56c6c);
-  border: 1px solid #fde2e2;
+  border: 1px solid var(--color-danger-soft);
 }
 
 .cell-empty {

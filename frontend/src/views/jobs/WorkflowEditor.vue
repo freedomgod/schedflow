@@ -1,7 +1,7 @@
 <template>
   <div class="workflow-editor">
     <div v-if="!props.readonly" class="wf-toolbar">
-      <el-button size="small" @click="addNode">添加节点</el-button>
+      <el-button size="small" type="primary" @click="addNode">添加节点</el-button>
       <el-button size="small" @click="lfInstance?.zoom(true)">放大</el-button>
       <el-button size="small" @click="lfInstance?.zoom(false)">缩小</el-button>
       <el-button size="small" @click="lfInstance?.resetZoom()">重置缩放</el-button>
@@ -167,7 +167,7 @@ function selectNode(nodeId: string) {
   if (selectedNodeId.value && lfInstance.value) {
     const prevNode = lfInstance.value.getNodeModelById(selectedNodeId.value)
     if (prevNode) {
-      const prevColor = nodeStatusColors.value.get(selectedNodeId.value) || 'rgba(255,255,255,0.25)'
+      const prevColor = nodeStatusColors.value.get(selectedNodeId.value) || 'var(--canvas-edge)'
       prevNode.setStyles({ strokeWidth: 1, stroke: prevColor })
     }
   }
@@ -326,7 +326,7 @@ onMounted(() => {
     if (selectedNodeId.value && lfInstance.value) {
       const prevNode = lfInstance.value.getNodeModelById(selectedNodeId.value)
       if (prevNode) {
-        const prevColor = nodeStatusColors.value.get(selectedNodeId.value) || 'rgba(255,255,255,0.25)'
+        const prevColor = nodeStatusColors.value.get(selectedNodeId.value) || 'var(--canvas-edge)'
         prevNode.setStyles({ strokeWidth: 1, stroke: prevColor })
       }
     }
@@ -338,10 +338,12 @@ onMounted(() => {
   })
 
   lf.register({ type: 'task-node', view: TaskNodeView, model: TaskNodeModel })
-  // Apply dark-mode-optimized text theme
+  // SVG resolves CSS variables live when the theme changes.
   lf.setTheme({
-    nodeText: { color: 'rgba(255,255,255,0.90)', fontSize: 12, fontWeight: 500 },
-    edgeText: { color: 'rgba(255,255,255,0.60)', fontSize: 11, textWidth: 100 },
+    nodeText: { color: 'var(--text-primary)', fontSize: 13, fontWeight: 500 },
+    edgeText: { color: 'var(--text-secondary)', fontSize: 12, textWidth: 100, background: { fill: 'var(--bg-base)' } },
+    polyline: { stroke: 'var(--canvas-edge)', strokeWidth: 1.5 },
+    arrow: { fill: 'var(--canvas-edge)', stroke: 'var(--canvas-edge)', offset: 10, verticalLength: 5 },
   })
   lf.render({})
 
@@ -650,13 +652,13 @@ function loadDag(data: DagData) {
     const status = props.nodeStatusMap?.[dagNode.node_id]
     if (status) {
       const colorMap: Record<string, string> = {
-        'SUCCEEDED': '#22C55E',
-        'FAILED': '#EF4444',
-        'SKIPPED': '#F59E0B',
+        'SUCCEEDED': 'var(--color-success)',
+        'FAILED': 'var(--color-danger)',
+        'SKIPPED': 'var(--color-warning)',
         'RUNNING': '#3B82F6',
-        'PENDING': 'rgba(255,255,255,0.25)',
+        'PENDING': 'var(--canvas-edge)',
       }
-      const strokeColor = colorMap[status] || 'rgba(255,255,255,0.25)'
+      const strokeColor = colorMap[status] || 'var(--canvas-edge)'
       nodeStatusColors.value.set(dagNode.node_id, strokeColor)
       nodeModel.setStyles({ fill: nodeStyle.fill, stroke: strokeColor, strokeWidth: 2.5 })
     }
@@ -720,7 +722,8 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
   flex-shrink: 0;
   background: var(--glass-bg);
   backdrop-filter: blur(8px);
@@ -729,12 +732,15 @@ defineExpose({
 }
 
 .wf-toolbar :deep(.el-button) {
-  font-size: 12px;
+  font-size: 13px;
+  min-height: 32px;
+  margin-left: 0;
 }
 
 .wf-hint {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--text-muted);
 }
 
@@ -769,9 +775,9 @@ defineExpose({
   position: absolute;
   top: 0;
   right: 0;
-  width: 480px;
+  width: min(480px, 100%);
   height: 100%;
-  background: var(--glass-bg);
+  background: var(--glass-panel-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-left: 1px solid var(--glass-border);
@@ -782,7 +788,7 @@ defineExpose({
 
 /* Glass context menu */
 .wf-context-menu {
-  background: var(--glass-bg);
+  background: var(--glass-panel-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
@@ -811,5 +817,9 @@ defineExpose({
 
 .wf-context-menu-item--danger:hover {
   background: var(--color-danger-soft);
+}
+@media (max-width: 600px) {
+  .wf-toolbar { padding: 10px; gap: 6px; }
+  .wf-hint { width: 100%; margin-left: 0; }
 }
 </style>

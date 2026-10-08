@@ -328,7 +328,7 @@ onMounted(fetchData)
   align-items: flex-start;
   margin-bottom: var(--space-lg);
 }
-.page-header h2 { margin: 0; font-family: var(--font-heading); font-size: 20px; font-weight: 700; color: var(--text-primary); }
+.page-header h2 { margin: 0; font-family: var(--font-heading); font-size: 26px; font-weight: 700; color: var(--text-primary); }
 .page-header .desc { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }
 
 .stats-row { margin-bottom: var(--space-lg); }
@@ -363,4 +363,15 @@ onMounted(fetchData)
 .config-params { display: flex; flex-wrap: wrap; gap: 4px; }
 .param-tag { margin: 0; }
 .no-config { color: var(--text-muted); }
+.executor-config { width: 100%; max-width: 1400px; margin: 0 auto; }
+.stat-card { background: var(--glass-bg); border-color: var(--glass-border); backdrop-filter: blur(var(--glass-blur)); min-height: 108px; border-radius: var(--radius-lg); }
+.stat-value { font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) { .executor-config { padding: 24px; } }
+@media (max-width: 600px) {
+  .executor-config { padding: 20px 16px; }
+  .page-header { flex-direction: column; gap: 16px; }
+  .page-header h2 { font-size: 23px; }
+  .stats-row { flex-wrap: wrap; row-gap: 12px; }
+  .stats-row :deep(.el-col) { max-width: 100%; flex-basis: 100%; }
+}
 </style>

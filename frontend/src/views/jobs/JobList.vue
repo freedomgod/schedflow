@@ -1,5 +1,7 @@
 <template>
   <div class="job-list page-wrapper">
+    <h1 class="page-title gradient-text">工作流管理</h1>
+    <p class="page-description">管理工作流、查看调度状态，随时追踪下一次运行。</p>
     <!-- Toolbar -->
     <div class="toolbar glass-card">
       <div class="toolbar-actions">
@@ -15,19 +17,19 @@
       <div class="toolbar-filters">
         <div class="filter-input">
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.5"/><line x1="13.5" y1="13.5" x2="17" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          <input v-model="search" placeholder="搜索任务名称..." class="filter-text-input" />
+          <input v-model="search" placeholder="搜索任务名称..." aria-label="搜索任务名称" class="filter-text-input" />
         </div>
-        <select v-model="statusFilter" class="filter-select">
+        <select v-model="statusFilter" class="filter-select" aria-label="按状态筛选">
           <option value="">全部状态</option>
           <option value="RUNNING">启用</option>
           <option value="PAUSED">暂停</option>
           <option value="COMPLETED">已完成</option>
         </select>
-        <select v-model="executorFilter" class="filter-select">
+        <select v-model="executorFilter" class="filter-select" aria-label="按执行器筛选">
           <option value="">全部执行器</option>
           <option v-for="e in executorOptions" :key="e" :value="e">{{ e }}</option>
         </select>
-        <select v-model="jobstoreFilter" class="filter-select">
+        <select v-model="jobstoreFilter" class="filter-select" aria-label="按存储筛选">
           <option value="">全部存储</option>
           <option v-for="j in jobstoreOptions" :key="j" :value="j">{{ j }}</option>
         </select>
@@ -59,15 +61,20 @@
               <template v-if="job.job_status === 'COMPLETED'">
                 <span class="cell-tag">已完成</span>
               </template>
+              <div v-else class="status-control">
               <button
-                v-else
                 class="toggle-switch"
+                role="switch"
+                :aria-checked="job.job_status === 'RUNNING'"
+                :aria-label="`${job.name}：${job.job_status === 'RUNNING' ? '暂停调度' : '启用调度'}`"
                 :class="{ active: job.job_status === 'RUNNING', loading: togglingStatus.has(job.id) }"
                 @click="handleToggleStatus(job, job.job_status !== 'RUNNING')"
                 :disabled="togglingStatus.has(job.id)"
               >
                 <span class="toggle-thumb"></span>
               </button>
+              <span class="status-text" :class="{ enabled: job.job_status === 'RUNNING' }">{{ job.job_status === 'RUNNING' ? '启用' : '暂停' }}</span>
+              </div>
             </td>
             <td><span class="cell-tag">{{ job.executor }}</span></td>
             <td><span class="cell-tag">{{ job.jobstore }}</span></td>
@@ -276,7 +283,8 @@ onBeforeUnmount(stopSSE)
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
+  min-height: 40px;
   font-weight: 500;
   font-family: var(--font-body);
   cursor: pointer;
@@ -291,6 +299,7 @@ onBeforeUnmount(stopSSE)
   align-items: center;
   gap: 8px;
   padding: 7px 12px;
+  min-height: 40px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -312,6 +321,7 @@ onBeforeUnmount(stopSSE)
 
 .filter-select {
   padding: 7px 12px;
+  min-height: 40px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -325,23 +335,25 @@ onBeforeUnmount(stopSSE)
 .filter-select:focus { border-color: var(--color-primary); }
 
 /* ── Table ──────── */
-.table-card { padding: 4px 0; overflow: hidden; }
+.table-card { padding: 4px 0; overflow-x: auto; }
 
 .table-loading { padding: 16px; }
 
 .data-table {
   width: 100%;
+  min-width: 940px;
   border-collapse: collapse;
 }
 
 .data-table thead th {
   padding: 12px 16px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   text-align: left;
+  background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -351,15 +363,19 @@ onBeforeUnmount(stopSSE)
 
 .data-row td {
   padding: 12px 16px;
-  font-size: 13px;
+  font-size: 14px;
   vertical-align: middle;
 }
 
-.cell-name { font-weight: 500; color: var(--text-primary); }
-.cell-id { font-family: 'Fira Code', monospace; font-size: 12px; color: var(--text-muted); }
+.cell-name { font-weight: 600; color: var(--text-primary); min-width: 180px; max-width: 280px; overflow-wrap: anywhere; }
+.cell-id { font-family: 'Fira Code', monospace; font-size: 12px; color: var(--text-muted); max-width: 180px; overflow-wrap: anywhere; }
 .cell-tag { font-size: 12px; color: var(--text-secondary); }
 .cell-time { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-.cell-actions { display: flex; gap: 4px; }
+.cell-actions { white-space: nowrap; }
+.cell-actions .action-btn + .action-btn { margin-left: 6px; }
+.status-control { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.status-text { font-size: 12px; color: var(--text-muted); }
+.status-text.enabled { color: var(--color-success); }
 
 /* ── Empty ──────── */
 .empty-state {
@@ -374,7 +390,9 @@ onBeforeUnmount(stopSSE)
 
 @media (max-width: 768px) {
   .toolbar { flex-direction: column; align-items: stretch; }
-  .toolbar-filters { flex-direction: column; }
+  .toolbar-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-input { grid-column: 1 / -1; }
   .filter-text-input { width: 100%; }
+  .filter-select { width: 100%; min-width: 0; }
 }
 </style>

@@ -8,9 +8,18 @@
  */
 
 .page-title {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
-  margin: 0 0 var(--space-lg);
+  line-height: 1.3;
+  margin: 0 0 8px;
+  letter-spacing: -0.025em;
+}
+
+.page-description {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: var(--space-lg);
 }
 
 .settings-tabs {
@@ -18,6 +27,7 @@
   gap: 0;
   margin-bottom: var(--space-lg);
   border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
 }
 
 .settings-card {
@@ -29,19 +39,20 @@
   align-items: center;
   gap: 6px;
   padding: 9px 18px;
+  min-height: 40px;
+  justify-content: center;
   border: none;
   border-radius: var(--radius-md);
-  background: var(--color-primary);
+  background: linear-gradient(135deg, var(--color-primary-button), var(--color-primary-button-hover));
   color: #fff;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   font-family: var(--font-body);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.9;
   transform: translateY(-1px);
   box-shadow: var(--shadow-glow);
 }
@@ -56,12 +67,17 @@
 }
 
 .action-btn {
-  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 5px 11px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
+  white-space: nowrap;
   font-family: var(--font-body);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -100,14 +116,21 @@
   color: var(--text-secondary);
 }
 
-.form-group .field-hint {
+.field-hint {
+  display: block;
   font-size: 12px;
+  font-weight: 400;
   color: var(--text-muted);
+  line-height: 1.6;
+  margin-top: 4px;
 }
+.el-form-item .field-hint { flex-basis: 100%; }
 
 .form-input,
 .form-select {
   padding: 10px 14px;
+  min-height: 40px;
+  min-width: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -137,7 +160,7 @@
 }
 
 .toggle-switch.active {
-  background: var(--color-success);
+  background: var(--color-primary-button);
 }
 
 .toggle-switch.loading {
@@ -159,4 +182,81 @@
 
 .toggle-switch.active .toggle-thumb {
   transform: translateX(18px);
+}
+
+/* Give built-in widgets the same surface and rhythm as custom controls. */
+.el-card {
+  --el-card-border-color: var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border-radius: var(--radius-lg);
+}
+
+.el-table {
+  --el-table-header-bg-color: var(--bg-surface);
+  --el-table-header-text-color: var(--text-secondary);
+  --el-table-row-hover-bg-color: var(--color-primary-soft);
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-border-color: var(--border-subtle);
+}
+
+.el-table th.el-table__cell { font-weight: 600; }
+.el-table .el-table__cell { padding: 14px 0; }
+.el-table .cell { line-height: 1.6; }
+
+.el-button { font-weight: 500; }
+.el-button--primary:not(.is-link):not(.is-text):not(.is-plain) {
+  --el-button-bg-color: var(--color-primary-button);
+  --el-button-border-color: var(--color-primary-button);
+  --el-button-text-color: #fff;
+  --el-button-hover-bg-color: var(--color-primary-button-hover);
+  --el-button-hover-border-color: var(--color-primary-button-hover);
+  --el-button-hover-text-color: #fff;
+  --el-button-active-bg-color: var(--color-primary-button-hover);
+  --el-button-active-border-color: var(--color-primary-button-hover);
+  --el-button-disabled-bg-color: var(--color-primary-button);
+  --el-button-disabled-border-color: var(--color-primary-button);
+  --el-button-disabled-text-color: #fff;
+}
+.el-button.is-disabled { opacity: 0.55; }
+.el-input__wrapper, .el-select__wrapper { min-height: 40px; }
+.el-input__wrapper, .el-select__wrapper, .el-textarea__inner {
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+}
+.el-form-item__label { font-weight: 500; }
+
+.el-dialog, .el-message-box, .el-drawer {
+  background: var(--glass-panel-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+}
+.el-dialog, .el-message-box { border-radius: var(--radius-lg); }
+.el-dialog { max-width: calc(100vw - 32px); }
+.el-dialog__header { padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle); }
+.el-dialog__body { padding-top: 20px; }
+.el-dialog__title { font-weight: 600; }
+.el-message-box { max-width: calc(100vw - 32px); }
+.el-popper.is-light { background: var(--glass-panel-bg); border-color: var(--glass-border); }
+.el-empty__description p { color: var(--text-muted); }
+.el-empty { padding: 40px 16px; }
+
+@media (max-width: 900px) {
+  html .page-wrapper { padding: 24px; }
+}
+
+@media (max-width: 600px) {
+  html .page-wrapper { padding: 20px 16px; }
+  .page-title { font-size: 23px; }
+  .settings-card { padding: 20px 16px; }
+  .settings-tabs { margin-bottom: 20px; }
+  .settings-tabs > button { flex-shrink: 0; }
+  .section-header { gap: 12px; flex-wrap: wrap; }
+  .btn-primary, .action-btn, .el-button:not(.is-link) { min-height: 40px; }
+}
+
+@media (pointer: coarse) {
+  .btn-primary, .action-btn, .el-button:not(.is-link) { min-height: 44px; }
+  .toggle-switch { outline: 10px solid transparent; }
 }

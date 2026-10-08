@@ -1,9 +1,9 @@
 <template>
-  <div class="app-layout">
-    <AppSidebar />
+  <div class="app-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <AppSidebar v-model:collapsed="sidebarCollapsed" />
     <div class="main-area">
       <AppTopbar />
-      <main class="main-content">
+      <main id="main-content" class="main-content">
         <router-view v-slot="{ Component }">
           <transition name="page-fade" mode="out-in">
             <component :is="Component" />
@@ -17,12 +17,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import AppSidebar from './AppSidebar.vue'
 import AppTopbar from './AppTopbar.vue'
 import { useSchedulerStore } from '@/stores/scheduler'
 
 const store = useSchedulerStore()
+const sidebarCollapsed = ref(false)
 
 onMounted(() => {
   store.fetchStatus()
@@ -31,13 +32,20 @@ onMounted(() => {
 
 <style scoped>
 .app-layout {
+  --layout-sidebar-width: var(--sidebar-width);
   display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: 1fr;
   height: 100vh;
+  height: 100dvh;
   background: var(--bg-deep);
   position: relative;
-  transition: grid-template-columns var(--transition-slow);
+  overflow: hidden;
+}
+
+.app-layout.sidebar-collapsed {
+  --layout-sidebar-width: var(--sidebar-collapsed-width);
+  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
 }
 
 .main-area {
@@ -54,6 +62,15 @@ onMounted(() => {
   overflow-x: hidden;
   position: relative;
   min-height: 0;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 900px) {
+  .app-layout,
+  .app-layout.sidebar-collapsed {
+    --layout-sidebar-width: var(--sidebar-collapsed-width);
+    grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+  }
 }
 
 /* ── Ambient blob ── */
