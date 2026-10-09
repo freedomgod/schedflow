@@ -127,7 +127,9 @@ def astimezone(obj):
             if obj.zone:
                 return ZoneInfo(obj.zone)
 
-            return timezone(obj._offset)
+            # Fixed-offset tzinfo implementations expose the offset publicly;
+            # pytz's private storage changed between releases.
+            return timezone(obj.utcoffset(None))
 
         return obj
 

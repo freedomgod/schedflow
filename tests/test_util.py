@@ -1,7 +1,7 @@
 import os
 import platform
 import sys
-from datetime import UTC, date, datetime, timedelta, tzinfo
+from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from functools import partial, wraps
 from types import ModuleType
 from unittest.mock import Mock
@@ -118,6 +118,30 @@ class TestAstimezone:
     def test_pytz(self):
         tz = pytz.timezone("Europe/Helsinki")
         assert astimezone(tz) == ZoneInfo(key="Europe/Helsinki")
+
+    @pytest.mark.parametrize("minutes", [-330, 0, 150])
+    def test_pytz_fixed_offset(self, minutes):
+        converted = astimezone(pytz.FixedOffset(minutes))
+        assert datetime(2026, 1, 1, tzinfo=converted) == datetime(
+            2026, 1, 1, tzinfo=timezone(timedelta(minutes=minutes))
+        )
+
+    @pytest.mark.parametrize("minutes", [-330, 0, 150])
+    def test_fixed_offset_without_private_attributes(self, minutes):
+        class FixedOffset(tzinfo):
+            zone = None
+
+            def utcoffset(self, dt):
+                return timedelta(minutes=minutes)
+
+            def tzname(self, dt):
+                return None
+
+            def dst(self, dt):
+                return timedelta(0)
+
+        converted = astimezone(FixedOffset())
+        assert converted == timezone(timedelta(minutes=minutes))
 
     def test_none(self):
         assert astimezone(None) is None
