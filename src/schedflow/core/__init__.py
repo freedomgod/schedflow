@@ -7,6 +7,7 @@ This package contains the user-facing building blocks of the library:
 are deliberately NOT exposed here.
 """
 
+from schedflow.core.commands import JobConfigConflictError
 from schedflow.core.events import EventBus, SchedulerEvent
 from schedflow.core.executor import (
     DebugExecutor,
@@ -34,6 +35,7 @@ __all__ = (
     "ExecutionLog",
     "Executor",
     "Job",
+    "JobConfigConflictError",
     "JobConflictError",
     "JobNotFoundError",
     "JobStore",

@@ -55,10 +55,10 @@ class AndTrigger(BaseCombiningTrigger):
         specific times of day, such as
         :class:`~schedflow.triggers.cron.CronTrigger` and
         class:`~schedflow.triggers.calendarinterval.CalendarIntervalTrigger`.
-        Attempting to use it with
-        :class:`~schedflow.triggers.interval.IntervalTrigger` will likely result in
-        the scheduler hanging as it tries to find a fire time that matches exactly
-        between fire times produced by all the given triggers.
+        Combining incompatible periodic phases can exhaust the intersection
+        search. After ``MAX_ITERATIONS`` attempts, ``get_next_fire_time`` raises
+        ``ValueError`` rather than blocking the scheduler indefinitely. A search
+        limit is not proof that the schedules can never intersect.
 
     :param list triggers: triggers to combine
     :param int|None jitter: delay the job execution by ``jitter`` seconds at most
@@ -66,9 +66,10 @@ class AndTrigger(BaseCombiningTrigger):
 
     __slots__ = ()
     _trigger_type = "and"
+    MAX_ITERATIONS = 1000
 
     def get_next_fire_time(self, previous_fire_time, now):
-        while True:
+        for _ in range(self.MAX_ITERATIONS):
             fire_times = [
                 trigger.get_next_fire_time(previous_fire_time, now)
                 for trigger in self.triggers
@@ -79,6 +80,9 @@ class AndTrigger(BaseCombiningTrigger):
                 return self._apply_jitter(fire_times[0], self.jitter, now)
             else:
                 now = max(fire_times)
+        raise ValueError(
+            f"AndTrigger intersection search exceeded the limit of {self.MAX_ITERATIONS} iterations"
+        )
 
     def __str__(self):
         return "and[{}]".format(", ".join(str(trigger) for trigger in self.triggers))

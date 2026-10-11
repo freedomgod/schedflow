@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import copy
 import logging
+import math
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import Future
+from concurrent.futures import ThreadPoolExecutor as ManualThreadPool
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -13,11 +17,13 @@ from typing import TYPE_CHECKING
 
 from tzlocal import get_localzone
 
+from schedflow.core.commands import JobConfigConflictError, config_hash
 from schedflow.core.dispatch import DispatchQueue
 from schedflow.core.events import EventBus, SchedulerEvent
 from schedflow.core.executor import ThreadPoolExecutor
 from schedflow.core.job import Job
 from schedflow.core.jobstore import (
+    JobConflictError,
     JobNotFoundError,
     MemoryJobStore,
 )
@@ -78,6 +84,9 @@ class Scheduler:
     #: How long a jobstore that failed is skipped before it is probed again.
     #: Keeps a dead backend from stalling the loop on every pass.
     JOBSTORE_RETRY_AFTER_SECONDS = 5.0
+    MANUAL_RUN_WORKERS = 4
+    MANUAL_RUN_CAPACITY = 16
+    MANUAL_RUN_HISTORY = 128
 
     def __init__(
         self,
@@ -113,6 +122,10 @@ class Scheduler:
         self._thread: threading.Thread | None = None
         self._jobstore_unhealthy_until: dict[str, float] = {}
         self._jobstore_last_error: dict[str, str] = {}
+        self._manual_pool: ManualThreadPool | None = None
+        self._manual_pending = 0
+        self._manual_closed = False
+        self._manual_futures: dict[str, tuple[str, Future]] = {}
         gauge_set("schedflow_scheduler_state", 0)
 
     # ── timezone ────────────────────────────────────────────────────────
@@ -519,6 +532,72 @@ class Scheduler:
                 labels={"status": status},
             )
 
+    def job_config_hash(self, job_id: str) -> str:
+        """Return a version token covering the complete job configuration."""
+        with self._lock:
+            job = self._find_job(job_id)
+            if job is None:
+                raise JobNotFoundError(job_id)
+            return config_hash(job.to_dict())
+
+    def apply_job_command(
+        self, action: str, payload: dict, *, expected_hash: str | None = None
+    ) -> Job:
+        """Validate and atomically install a full reviewed job configuration."""
+        if action not in {"create", "update"}:
+            raise ValueError("action must be 'create' or 'update'")
+        data = copy.deepcopy(payload)
+        job_id = data.get("job_id")
+        if not isinstance(job_id, str) or not job_id:
+            raise ValueError("job_id must be a non-empty string")
+        if data.get("status") not in {"paused", "running"}:
+            raise ValueError("status must be 'paused' or 'running'")
+        for field, minimum in (("max_instances", 1), ("priority", 0)):
+            value = data.get(field, minimum)
+            if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+                raise ValueError(f"{field} must be an integer >= {minimum}")
+        if not isinstance(data.get("coalesce", True), bool):
+            raise TypeError("coalesce must be a boolean")
+        for field in ("misfire_grace_time", "workflow_timeout"):
+            value = data.get(field)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or value < 0
+                or (field == "workflow_timeout" and value == 0)
+            ):
+                raise ValueError(f"invalid {field}")
+        with self._lock:
+            # Do not mask backend failures when establishing absence or a version.
+            old = next(
+                (job for store in self._jobstores.values()
+                 if (job := store.get(job_id)) is not None), None
+            )
+            if action == "create" and old is not None:
+                raise JobConflictError(job_id)
+            if action == "update":
+                if old is None:
+                    raise JobNotFoundError(job_id)
+                if expected_hash is None or config_hash(old.to_dict()) != expected_hash:
+                    raise JobConfigConflictError("Job configuration changed since review")
+                if data.get("jobstore_alias", "default") != old.jobstore_alias:
+                    raise ValueError("jobstore migration is not supported by job commands")
+            self._lookup_executor(data.get("executor_alias", "default"))
+            store = self._lookup_jobstore(data.get("jobstore_alias", "default"))
+            data["next_run_time"] = None
+            candidate = Job.from_dict(data, project_root=self._project_root)
+            candidate.workflow.validate()
+            self._arm(candidate, datetime.now(self._timezone))
+            if action == "create":
+                store.add(candidate)
+            else:
+                store.update(candidate)
+        self._events.publish(SchedulerEvent(
+            "job.added" if action == "create" else "job.updated", job_id=job_id
+        ))
+        self._refresh_job_metrics()
+        self.wakeup()
+        return candidate
+
     def get_job(self, job_id: str) -> Job | None:
         with self._lock:
             return self._find_job(job_id)
@@ -830,7 +909,9 @@ class Scheduler:
 
         return request, snapshot, on_node_finished
 
-    def _finalize_active_snapshot(self, job: Job, log: ExecutionLog) -> None:
+    def _finalize_active_snapshot(
+        self, job: Job, log: ExecutionLog, *, store: JobStore | None = None
+    ) -> None:
         with self._dispatch_lock:
             snapshot = self._active_snapshots.pop(log.log_id, None)
         if snapshot is None:
@@ -842,7 +923,7 @@ class Scheduler:
         else:
             status = "failed"
         snapshot.mark_status(status)
-        store = self._job_store(job)
+        store = store if store is not None else self._job_store(job)
         try:
             store.save_snapshot(job.job_id, snapshot)
             snapshots = store.list_snapshots(job.job_id)
@@ -882,10 +963,124 @@ class Scheduler:
             job = self._find_job(job_id)
             if job is None:
                 raise JobNotFoundError(job_id)
-            store = self._jobstores.get(job.jobstore_alias, self._jobstore)
         request, snapshot, on_node_finished = self._prepare_run(
             job, RunRequest(mode=mode, timeout=timeout)
         )
+        return self._execute_prepared_run(
+            job, request, snapshot, on_node_finished, max_workers=max_workers
+        )
+
+    def accept_manual_run(
+        self,
+        job_id: str,
+        *,
+        expected_hash: str,
+        execution_id: str,
+        timeout: float | None = None,
+    ) -> Future[ExecutionLog]:
+        """Accept a frozen run without waiting for its workflow to finish.
+
+        ``agentrun_`` IDs are reserved for approved runs; recovery never
+        automatically reruns their durable snapshots after a process restart.
+        """
+        if not isinstance(execution_id, str) or not execution_id:
+            raise ValueError("execution_id must be a non-empty string")
+        if timeout is not None and (
+            isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout) or timeout <= 0
+        ):
+            raise ValueError("timeout must be positive or None")
+        with self._lock:
+            previous = self._manual_futures.get(execution_id)
+            if previous is not None:
+                if previous[0] != job_id:
+                    raise JobConfigConflictError("execution_id already exists for another job")
+                return previous[1]
+            job = self._find_job(job_id)
+            if job is None:
+                raise JobNotFoundError(job_id)
+            if config_hash(job.to_dict()) != expected_hash:
+                raise JobConfigConflictError("Job configuration changed since review")
+            store = self._job_store(job)
+            existing_log = store.get_log(job_id, execution_id)
+            if existing_log is not None:
+                completed = Future()
+                completed.set_result(existing_log)
+                return completed
+            if store.get_snapshot(job_id, execution_id) is not None:
+                raise JobConfigConflictError("execution_id already exists; outcome requires reconciliation")
+            if self._manual_closed:
+                raise ValueError("manual run pool is shut down; start the scheduler first")
+            if self._manual_pending >= self.MANUAL_RUN_CAPACITY:
+                raise ValueError("manual run capacity exceeded")
+            self._lookup_executor(job.executor_alias)
+            self._lookup_jobstore(job.jobstore_alias)
+            # Deep-copy config without importing lazy refs or replacing trusted
+            # in-process functions. Nested kwargs are detached from caller edits.
+            frozen = copy.deepcopy(job)
+            frozen.workflow.validate()
+            with self._dispatch_lock:
+                count = self._running.get(job_id, 0)
+                if count >= job.max_instances:
+                    raise ValueError("max_instances exceeded")
+                request, snapshot, on_node_finished = self._prepare_run(
+                    frozen, RunRequest(
+                        execution_id=execution_id,
+                        timeout=timeout if timeout is not None else job.workflow_timeout,
+                    )
+                )
+                self._running[job_id] = count + 1
+            if self._manual_pool is None:
+                self._manual_pool = ManualThreadPool(
+                    max_workers=self.MANUAL_RUN_WORKERS,
+                    thread_name_prefix="schedflow-manual",
+                )
+            future = Future()
+            # Once accepted, cancelling the receipt cannot cancel accepted work.
+            future.set_running_or_notify_cancel()
+            # Keep only a small in-memory receipt history. Older completions
+            # remain idempotent through the persisted execution log/snapshot.
+            for saved_id, (_target, saved_future) in list(self._manual_futures.items()):
+                if len(self._manual_futures) < self.MANUAL_RUN_HISTORY:
+                    break
+                if saved_future.done():
+                    del self._manual_futures[saved_id]
+            self._manual_futures[execution_id] = (job_id, future)
+            self._manual_pending += 1
+
+            def execute() -> None:
+                error = None
+                try:
+                    log = self._execute_prepared_run(
+                        frozen, request, snapshot, on_node_finished, store=store
+                    )
+                except BaseException as exc:  # noqa: BLE001 - always settle the accepted receipt
+                    error = exc
+                finally:
+                    with self._lock:
+                        self._manual_pending -= 1
+                    with self._dispatch_lock:
+                        remaining = self._running.get(job_id, 1) - 1
+                        if remaining <= 0:
+                            self._running.pop(job_id, None)
+                            self._cancel_events.pop(job_id, None)
+                        else:
+                            self._running[job_id] = remaining
+                if error is not None:
+                    future.set_exception(error)
+                else:
+                    future.set_result(log)
+
+            self._manual_pool.submit(execute)
+            return future
+
+    def _execute_prepared_run(
+        self, job: Job, request: RunRequest, snapshot: RunSnapshot,
+        on_node_finished: Callable, *, max_workers: int = 3,
+        store: JobStore | None = None,
+    ) -> ExecutionLog:
+        job_id = job.job_id
+        store = store if store is not None else self._job_store(job)
         self._events.publish(
             SchedulerEvent("job.started", job_id=job_id)
         )
@@ -894,6 +1089,7 @@ class Scheduler:
                 max_workers=max_workers,
                 request=request,
                 on_node_finished=on_node_finished,
+                cancel_event=self._cancel_event_for(job_id),
             )
         except Exception:
             snapshot.mark_status("failed")
@@ -915,7 +1111,7 @@ class Scheduler:
             SchedulerEvent(kind, job_id=job_id, log=log)
         )
         self._record_run_metrics(kind, log)
-        self._finalize_active_snapshot(job, log)
+        self._finalize_active_snapshot(job, log, store=store)
         return log
 
     @staticmethod
@@ -989,6 +1185,8 @@ class Scheduler:
     def start(self, paused: bool = False) -> None:
         if self.state != STATE_STOPPED:
             raise ValueError("Scheduler is already running")
+        with self._lock:
+            self._manual_closed = False
         for executor in self._executors.values():
             executor.start(self)
         self.state = STATE_PAUSED if paused else STATE_RUNNING
@@ -1030,6 +1228,12 @@ class Scheduler:
         self._events.publish(SchedulerEvent("scheduler.resumed"))
 
     def shutdown(self, *, wait: bool = True) -> None:
+        with self._lock:
+            self._manual_closed = True
+            manual_pool = self._manual_pool
+            self._manual_pool = None
+        if manual_pool is not None:
+            manual_pool.shutdown(wait=wait, cancel_futures=False)
         if self.state == STATE_STOPPED:
             return
         self._stop_event.set()
@@ -1057,6 +1261,7 @@ class Scheduler:
                     snapshot
                     for snapshot in store.list_snapshots(job.job_id)
                     if snapshot.status == "running"
+                    and not snapshot.execution_id.startswith("agentrun_")
                 ),
                 None,
             )
@@ -1184,14 +1389,15 @@ class Scheduler:
                 self._publish_error(exc, key="main-loop")
 
     def _process_due(self) -> None:
-        now = datetime.now(self._timezone)
-        due = []
-        for alias, jobstore in self._jobstores.items():
-            due.extend(
-                self._guarded(alias, jobstore.get_due, now, default=[]) or []
-            )
-        for job in due:
-            self._run_due_job(job, now)
+        with self._lock:
+            now = datetime.now(self._timezone)
+            due = []
+            for alias, jobstore in self._jobstores.items():
+                due.extend(
+                    self._guarded(alias, jobstore.get_due, now, default=[]) or []
+                )
+            for job in due:
+                self._run_due_job(job, now)
 
     def _run_due_job(self, job: Job, now: datetime) -> None:
         run_time = job.next_run_time
