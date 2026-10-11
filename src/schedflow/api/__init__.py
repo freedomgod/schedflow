@@ -36,11 +36,17 @@ async def _lifespan(app: FastAPI):
         sink.start(scheduler)
     app.state.webhook_sink = sink
     try:
+        if app.state.agent is not None:
+            await app.state.agent.start()
         yield
     finally:
-        if sink is not None:
-            sink.close()
-        scheduler.shutdown(wait=False)
+        try:
+            if app.state.agent is not None:
+                await app.state.agent.close()
+        finally:
+            if sink is not None:
+                sink.close()
+            scheduler.shutdown(wait=False)
 
 
 def create_app(
@@ -48,6 +54,7 @@ def create_app(
     include_routers: bool = True,
     include_exception_handlers: bool = True,
     include_auth: bool = True,
+    agent_service: Any = None,
     **options: Any,
 ) -> FastAPI:
     """Create and configure the FastAPI application around one core scheduler."""
@@ -57,6 +64,11 @@ def create_app(
     app = FastAPI(**options)
     app.state.scheduler = scheduler
     app.state.scheduler_api = scheduler
+    if agent_service is None and include_routers:
+        from schedflow.agent.service import AgentService
+
+        agent_service = AgentService(scheduler)
+    app.state.agent = agent_service
     app.router.lifespan_context = _lifespan
 
     if include_auth:
@@ -80,6 +92,7 @@ def create_app(
 
     if include_routers:
         from schedflow.api.rest.routers import router as rest_router
+        from schedflow.api.routers.agent import router as agent_router
         from schedflow.api.routers.auth import router as auth_router
         from schedflow.api.routers.components import router as components_router
         from schedflow.api.routers.settings import router as settings_router
@@ -90,6 +103,7 @@ def create_app(
         app.include_router(sse_router, prefix="/api/v1")
         app.include_router(auth_router, prefix="/api/v1")
         app.include_router(settings_router, prefix="/api/v1")
+        app.include_router(agent_router, prefix="/api/v1")
 
     if include_exception_handlers:
         from schedflow.api.exceptions import register_exception_handlers
