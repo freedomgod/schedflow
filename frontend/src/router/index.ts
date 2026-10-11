@@ -35,6 +35,12 @@ const router = createRouter({
       meta: { title: '仪表盘' },
     },
     {
+      path: '/agent',
+      name: 'agent',
+      component: () => import('@/views/agent/AgentChat.vue'),
+      meta: { title: '调度 Agent' },
+    },
+    {
       path: '/jobs',
       name: 'jobs',
       component: () => import('@/views/jobs/JobList.vue'),

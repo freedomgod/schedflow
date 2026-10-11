@@ -10,6 +10,7 @@
         <span v-if="job" class="header-id">{{ job.id }}</span>
       </div>
       <div class="header-actions">
+        <button v-if="job" class="btn-ghost" @click="$router.push({ path: '/agent', query: { job_id: job.id } })">交给 Agent</button>
         <button v-if="!isConfigEditing" class="btn-primary" @click="enterConfigEdit">编辑配置</button>
         <button class="btn-ghost" @click="$router.push({ path: '/logs', query: { jobId: job?.id, jobName: job?.name } })">查看日志</button>
       </div>
@@ -183,7 +184,7 @@ import type { Job } from '@/types'
 import type { DagData, TaskNodeProperties } from '@/types/workflow'
 import { getExecutorConfigs, getConfiguredJobstores, getJobstoreConfig } from '@/api/components'
 import type { ComponentConfig, JobstoreDetailConfig } from '@/api/components'
-import { marked } from 'marked'
+import { safeMarkdown } from '@/utils/safeMarkdown'
 import { useJobSse } from '@/composables/useJobSse'
 import WorkflowEditor from './WorkflowEditor.vue'
 import TriggerConfig from './TriggerConfig.vue'
@@ -365,7 +366,7 @@ async function handleCancelRun() {
 }
 async function showJobstoreConfig(alias: string) { jobstoreDialogTitle.value = `存储后端配置 — ${alias}`; jobstoreDialogVisible.value = true; try { const d: JobstoreDetailConfig = await getJobstoreConfig(alias); jobstoreFields.value = Object.entries(d.config || {}).map(([k, v]) => ({ label: k, value: v })) } catch { jobstoreFields.value = [] } }
 function showTriggerConfig() { if (!job.value) return; triggerDialogTitle.value = `触发器配置 — ${job.value.trigger || '-'}`; triggerDialogVisible.value = true; const a = job.value.trigger_args; triggerFields.value = a && Object.keys(a).length > 0 ? Object.entries(a).map(([k, v]) => ({ label: k, value: v })) : [] }
-function renderMarkdown(text: string | undefined | null): string { if (!text) return ''; return marked(text) as string }
+function renderMarkdown(text: string | undefined | null): string { if (!text) return ''; return safeMarkdown(text) }
 
 onMounted(() => { fetchJob(); void fetchRuns(); startSSE() })
 onBeforeUnmount(() => { stopSSE() })

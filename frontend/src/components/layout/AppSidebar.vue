@@ -27,6 +27,10 @@
         <span v-show="!isCollapsed" class="nav-label">仪表盘</span>
         <span v-if="isActive('/dashboard') && !isCollapsed" class="nav-indicator"></span>
       </router-link>
+      <router-link to="/agent" class="nav-item" :class="{ active: isActive('/agent') }" title="调度 Agent">
+        <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.1 5.9L18 10l-5.9 2.1L10 18l-2.1-5.9L2 10l5.9-2.1L10 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></span>
+        <span v-show="!isCollapsed">调度 Agent</span>
+      </router-link>
       <router-link to="/jobs" class="nav-item" :class="{ active: isActive('/jobs') }" title="工作流管理">
         <span class="nav-icon">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><line x1="2" y1="7" x2="18" y2="7" stroke="currentColor" stroke-width="1.5"/><line x1="7" y1="2" x2="7" y2="7" stroke="currentColor" stroke-width="1.5"/><line x1="13" y1="2" x2="13" y2="7" stroke="currentColor" stroke-width="1.5"/></svg>

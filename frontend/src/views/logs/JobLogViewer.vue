@@ -44,7 +44,7 @@
             </transition>
           </div>
         </template>
-        <el-empty v-else description="选择左侧执行记录查看详情" />
+        <el-empty v-else :description="route.query.executionId ? '本次执行日志尚未生成，请稍后刷新' : '选择左侧执行记录查看详情'" />
       </div>
     </div>
   </div>
@@ -54,6 +54,7 @@
 import { ref, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getJobLogs } from '@/api/logs'
+import { requestedExecutionIndex } from '@/utils/executionLink'
 import type { ExecutionLog, NodeExecutionRecord, DagData } from '@/types/workflow'
 import TaskSelector from './TaskSelector.vue'
 import ExecutionList from './ExecutionList.vue'
@@ -106,7 +107,8 @@ async function fetchLogs(jobId: string) {
     logs.value = result
       .sort((a, b) => new Date(b.start_time ?? 0).getTime() - new Date(a.start_time ?? 0).getTime())
     if (logs.value.length > 0) {
-      selectLog(0)
+      const target = route.query.jobId === jobId ? route.query.executionId : undefined
+      selectLog(requestedExecutionIndex(logs.value, target))
     }
   } catch {
     logs.value = []
@@ -141,7 +143,7 @@ function handleNodeClick(nodeId: string) {
 }
 
 // Auto-select task from query params
-watch(() => route.query.jobId, (jobId) => {
+watch(() => [route.query.jobId, route.query.executionId], ([jobId]) => {
   if (jobId && typeof jobId === 'string') {
     const name = (route.query.jobName as string) || ''
     handleTaskSelect(jobId, name)
