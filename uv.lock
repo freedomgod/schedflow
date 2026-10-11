@@ -1377,9 +1377,17 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+agent = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "passlib", extra = ["bcrypt"] },
+    { name = "pyjwt" },
+    { name = "uvicorn", extra = ["standard"] },
+]
 all = [
     { name = "fastapi" },
     { name = "gevent" },
+    { name = "httpx" },
     { name = "passlib", extra = ["bcrypt"] },
     { name = "pyjwt" },
     { name = "pymongo" },
@@ -1455,6 +1463,7 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'web'", specifier = "==0.136.1" },
     { name = "gevent", marker = "python_full_version < '3.14' and extra == 'test'" },
     { name = "gevent", marker = "extra == 'gevent'" },
+    { name = "httpx", marker = "extra == 'agent'", specifier = ">=0.28,<1" },
     { name = "httpx", marker = "extra == 'test'" },
     { name = "mkdocs", marker = "extra == 'doc'", specifier = ">=1.6,<2" },
     { name = "mkdocs-material", marker = "extra == 'doc'", specifier = ">=9.5,<10" },
@@ -1474,9 +1483,10 @@ requires-dist = [
     { name = "pytz", marker = "extra == 'test'" },
     { name = "redis", marker = "extra == 'redis'", specifier = ">=3.0" },
     { name = "ruff", marker = "extra == 'doc'", specifier = "==0.16.1" },
-    { name = "schedflow", extras = ["gevent", "mongodb", "redis", "sqlalchemy", "tornado", "twisted", "web"], marker = "extra == 'all'" },
+    { name = "schedflow", extras = ["agent", "gevent", "mongodb", "redis", "sqlalchemy", "tornado", "twisted", "web"], marker = "extra == 'all'" },
     { name = "schedflow", extras = ["mongodb", "redis", "sqlalchemy", "tornado", "web"], marker = "extra == 'test'" },
     { name = "schedflow", extras = ["mongodb", "redis", "sqlalchemy", "web"], marker = "extra == 'doc'" },
+    { name = "schedflow", extras = ["web"], marker = "extra == 'agent'" },
     { name = "sqlalchemy", marker = "extra == 'sqlalchemy'", specifier = ">=1.4" },
     { name = "structlog", specifier = ">=25.4.0" },
     { name = "tenacity", specifier = ">=9.0.0" },
@@ -1487,7 +1497,7 @@ requires-dist = [
     { name = "tzlocal", specifier = ">=3.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'web'", specifier = "==0.46.0" },
 ]
-provides-extras = ["mongodb", "redis", "sqlalchemy", "tornado", "twisted", "gevent", "web", "all", "test", "doc"]
+provides-extras = ["mongodb", "redis", "sqlalchemy", "tornado", "twisted", "gevent", "web", "all", "agent", "test", "doc"]
 
 [[package]]
 name = "six"

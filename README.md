@@ -33,6 +33,7 @@ SchedFlow 把传统“一个 Job = 一次函数调用”的定时任务模型升
 | **执行日志** | `ExecutionLog` / `TaskRecord`：逐节点状态、结果、错误、耗时、stdout/stderr 与 DAG 快照 |
 | **Web API** | FastAPI REST API（`/api`），统一 `{"code": 0, "data": ..., "message": "ok"}` 响应 |
 | **管理面板** | Vue 3 + Element Plus：DAG 编辑器、作业管理、执行日志、暗色/亮色主题 |
+| **个人调度助手** | 可选 AI Agent：查询任务、预览 DAG/代码/差异、确认创建/修改/运行、查看真实执行回执 |
 
 ## 快速开始
 
@@ -106,10 +107,13 @@ pip install schedflow[sqlalchemy]      # SQLAlchemy 作业存储
 pip install schedflow[redis]           # Redis 作业存储
 pip install schedflow[mongodb]         # MongoDB 作业存储
 pip install schedflow[web]             # FastAPI Web API
+pip install schedflow[agent]           # 个人 AI 调度助手（包含 Web 依赖）
 pip install schedflow[all]             # 全部可选依赖
 ```
 
 ## 核心概念
+
+AI 助手使用服务端配置的 OpenAI 兼容工具调用接口；默认关闭，新建、修改和运行均需确认。配置与恢复说明见 [个人调度助手](docs/agent.md)。
 
 - **Workflow**——DAG 工作流。`add_task()` 添加节点、`add_edge()` 添加（可带条件的）依赖边并自动做环路检测；`run()` 直接执行；`to_dict()/from_dict()` 是唯一的 JSON 序列化路径。
 - **TaskSpec**——一个节点“做什么”，四种类型：`python_callable`、`python`、`python_script`、`bash`。

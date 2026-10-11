@@ -33,8 +33,15 @@ New code imports from `schedflow.core`, `schedflow.triggers` and `schedflow.api.
 | **Execution logs** | `ExecutionLog` / `TaskRecord`: per-node status, result, error, timing, stdout/stderr and a DAG snapshot |
 | **Web API** | FastAPI REST API under `/api` with a unified `{"code": 0, "data": ..., "message": "ok"}` response |
 | **Dashboard** | Vue 3 + Element Plus UI: DAG editor, job management, execution logs, dark/light themes |
+| **Personal scheduling assistant** | Optional AI Agent: query workflows, preview DAG/code/diffs, confirm create/update/run, and inspect actual operation receipts |
 
 ## Quick start
+
+The optional personal Agent uses a server-configured OpenAI-compatible Chat Completions service with tool calling. Install `pip install "schedflow[agent]"`, set `SCHEDFLOW_AGENT_ENABLED=true`, `SCHEDFLOW_AGENT_BASE_URL`, `SCHEDFLOW_AGENT_MODEL`, and `SCHEDFLOW_AGENT_API_KEY` in the server `.env`, then restart the backend. It is disabled by default; credentials never belong in chat. Use the unified factory `schedflow.api.create_app`, not the REST-only factory, to expose `/api/v1/agent`.
+
+The assistant can query workflows and prepare create/update/run proposals. Review the DAG, code, and differences before confirming. New jobs default to paused. Code generation is disabled unless `SCHEDFLOW_AGENT_ALLOW_CODE_GENERATION=true`; existing trusted jobs can still be queried and rescheduled. This personal deployment reuses authentication and the existing trusted-code execution model, without a sandbox or multi-user permission system.
+
+Conversation history and receipts live in the metadata SQLite database. Stopping a response cancels model generation, while an accepted workflow continues. Duplicate confirmations return the same operation. Restart recovery marks unresolved operations as `unknown` and does not automatically repeat Agent runs. Offline tests use a mock model; a configured real provider still needs a query smoke test. See the [configuration and recovery guide](docs/agent.md) for details.
 
 A complete, runnable example that mixes several task types and shows both direct execution and 60-second scheduling:
 

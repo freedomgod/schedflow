@@ -19,7 +19,7 @@ ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 # DOCKER_BUILDKIT=1 with the frontend mirrored in a reachable registry if
 # you want that cache back.
 RUN pip install --index-url "$PIP_INDEX_URL" \
-        ".[web,sqlalchemy,redis,mongodb]"
+        ".[agent,sqlalchemy,redis,mongodb]"
 
 # Runtime data (SQLite databases) lives in a mounted volume.
 VOLUME /app/data
