@@ -1,6 +1,6 @@
 import { expireSession } from '../utils/session'
 import { SseDecoder } from './protocol'
-import type { AgentConfig, AgentEvent, AgentOperation, AgentProposal, AgentSession, AgentTurn } from './types'
+import type { AgentConfig, AgentConfigUpdate, AgentProvider, AgentEvent, AgentOperation, AgentProposal, AgentSession, AgentTurn } from './types'
 const base = `${(import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')}/agent`
 function authHeaders(): Headers { const headers = new Headers(); const token = localStorage.getItem('schedflow_token'); if (token) headers.set('Authorization', `Bearer ${token}`); return headers }
 async function failure(response: Response): Promise<Error> {
@@ -26,6 +26,11 @@ export async function streamTurn(turnId: string, after: number, signal: AbortSig
 const id = encodeURIComponent
 export const agentApi = {
   config: () => agentRequest<AgentConfig>('/config-status'),
+  settings: () => agentRequest<AgentConfig>('/config'),
+  providers: () => agentRequest<{ providers: AgentProvider[] }>('/providers'),
+  saveSettings: (config: AgentConfigUpdate) => agentRequest<AgentConfig>('/config', { method: 'PUT', body: JSON.stringify(config) }),
+  testSettings: (config: AgentConfigUpdate) => agentRequest<{ success: boolean; message: string }>('/config/test', { method: 'POST', body: JSON.stringify(config) }),
+  setEnabled: (enabled: boolean) => agentRequest<AgentConfig>('/enabled', { method: 'PUT', body: JSON.stringify({ enabled }) }),
   sessions: async () => { const data = await agentRequest<AgentSession[] | { sessions: AgentSession[] }>('/sessions'); return Array.isArray(data) ? data : data.sessions },
   createSession: () => agentRequest<AgentSession>('/sessions', { method: 'POST', body: '{}' }),
   session: (sessionId: string) => agentRequest<AgentSession>(`/sessions/${id(sessionId)}`),

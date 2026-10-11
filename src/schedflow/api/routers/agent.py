@@ -4,12 +4,31 @@ import asyncio
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field
 
+from schedflow.agent.settings import ConfigUpdate, config_candidate, probe_config
 from schedflow.api.schemas import APIResponse
 
-router = APIRouter(prefix="/agent", tags=["agent"])
+
+class PrivateRequestRoute(APIRoute):
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def private_handler(request):
+            try:
+                return await handler(request)
+            except RequestValidationError:
+                # Default FastAPI errors include the submitted input; settings
+                # bodies can contain credentials even in malformed fields.
+                raise HTTPException(422, "Invalid Agent request parameters") from None
+
+        return private_handler
+
+
+router = APIRouter(prefix="/agent", tags=["agent"], route_class=PrivateRequestRoute)
 
 
 class StrictRequest(BaseModel):
@@ -64,7 +83,55 @@ def _call(service, function, *args, **kwargs):
 
 @router.get("/config-status")
 def config_status(service=Depends(_service)):
-    return APIResponse(data=service.config.public_status())
+    return APIResponse(data=service._safe(service.config.public_status()))
+
+
+@router.get("/providers")
+def providers(actor=Depends(_human)):
+    from schedflow.agent.providers import provider_catalog
+
+    return APIResponse(data={"providers": provider_catalog()})
+
+
+@router.get("/config")
+def get_config(actor=Depends(_human), service=Depends(_service)):
+    return APIResponse(data=service.public_config())
+
+
+@router.put("/config")
+async def put_config(
+    body: ConfigUpdate, actor=Depends(_human), service=Depends(_service)
+):
+    try:
+        return APIResponse(
+            data=await service.configure(body.model_dump(exclude_unset=True))
+        )
+    except ValueError as exc:
+        raise HTTPException(409, service._safe(str(exc))) from None
+
+
+@router.put("/enabled")
+async def set_enabled(
+    body: RevisionRequest, actor=Depends(_human), service=Depends(_service)
+):
+    try:
+        return APIResponse(data=await service.set_enabled(body.enabled))
+    except ValueError as exc:
+        raise HTTPException(409, service._safe(str(exc))) from None
+
+
+@router.post("/config/test")
+async def test_config(
+    body: ConfigUpdate, actor=Depends(_human), service=Depends(_service)
+):
+    try:
+        candidate = config_candidate(
+            service.config, body.model_dump(exclude_unset=True)
+        )
+        return APIResponse(data=await probe_config(candidate))
+    except ValueError as exc:
+        # Validation errors are fixed messages and never interpolate candidate inputs.
+        raise HTTPException(409, str(exc)) from None
 
 
 @router.get("/sessions")

@@ -1,8 +1,27 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { agentRequest, streamTurn } from '../api'
+import { agentApi, agentRequest, streamTurn } from '../api'
 
 afterEach(() => vi.unstubAllGlobals())
 describe('Agent transport', () => {
+  it('reads public provider profiles and full settings through human authenticated endpoints', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => 'token' })
+    const calls: string[] = []
+    vi.stubGlobal('fetch', async (url: string) => { calls.push(url); return new Response(JSON.stringify({ code: 0, data: { providers: [] } })) })
+    await agentApi.providers(); await agentApi.settings()
+    expect(calls[0]).toMatch(/\/agent\/providers$/); expect(calls[1]).toMatch(/\/agent\/config$/)
+  })
+  it('uses separate save, unsaved test, and immediate toggle endpoints', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => 'token' })
+    const calls: { url: string; options: RequestInit }[] = []
+    vi.stubGlobal('fetch', async (url: string, options: RequestInit) => { calls.push({ url, options }); return new Response(JSON.stringify({ code: 0, data: {} })) })
+    const payload = { enabled: false, provider: 'openai', protocol: 'responses', base_url: 'https://api.openai.com/v1', model: 'test', api_key: 'secret', clear_api_key: false, max_steps: 8, timeout: 60, max_tokens: 4096, allow_code_generation: false, retention_days: 30 } as const
+    await agentApi.saveSettings(payload); await agentApi.testSettings(payload); await agentApi.setEnabled(true)
+    expect(calls.map(call => call.options.method)).toEqual(['PUT', 'POST', 'PUT'])
+    expect(calls.map(call => call.url.split('/agent')[1])).toEqual(['/config', '/config/test', '/enabled'])
+    expect(calls[0].options.body).toBe(JSON.stringify(payload)); expect(calls[1].options.body).toBe(JSON.stringify(payload))
+    expect(calls[2].options.body).toBe('{"enabled":true}')
+    expect(calls.every(call => !call.url.includes('secret'))).toBe(true)
+  })
   it('sends bearer auth in headers without placing credentials in URL', async () => {
     vi.stubGlobal('localStorage', { getItem: () => 'secret-token' })
     let calledUrl = ''; let headers: Headers | undefined

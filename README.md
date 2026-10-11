@@ -113,7 +113,7 @@ pip install schedflow[all]             # 全部可选依赖
 
 ## 核心概念
 
-AI 助手使用服务端配置的 OpenAI 兼容工具调用接口；默认关闭，新建、修改和运行均需确认。配置与恢复说明见 [个人调度助手](docs/agent.md)。
+AI 助手使用 LangGraph 编排调度工具；可在「系统设置 → AI Agent」配置常用模型服务、测试连接及即时启停。默认关闭，新建、修改和运行均需确认。配置与恢复说明见 [个人调度助手](docs/agent.md)。
 
 - **Workflow**——DAG 工作流。`add_task()` 添加节点、`add_edge()` 添加（可带条件的）依赖边并自动做环路检测；`run()` 直接执行；`to_dict()/from_dict()` 是唯一的 JSON 序列化路径。
 - **TaskSpec**——一个节点“做什么”，四种类型：`python_callable`、`python`、`python_script`、`bash`。

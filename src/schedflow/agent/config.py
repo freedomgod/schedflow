@@ -16,6 +16,11 @@ class AgentConfig(BaseSettings):
         extra="ignore",
     )
     enabled: bool = False
+    # Existing environment configurations keep the original compatible protocol.
+    provider: str = "custom"
+    protocol: str = "chat_completions"
+    region: str = ""
+    workspace_id: str = ""
     base_url: str = "https://api.openai.com/v1"
     model: str = ""
     api_key: str = Field(default="", repr=False)
@@ -26,21 +31,35 @@ class AgentConfig(BaseSettings):
     retention_days: int = Field(default=30, ge=1, le=3650)
 
     def public_status(self):
-        configured = bool(self.model and self.base_url)
-        parsed = urlsplit(self.base_url)
-        safe_url = urlunsplit(
-            (parsed.scheme, parsed.netloc.split("@")[-1], parsed.path, "", "")
-        )
+        from .settings import validate_config
+
+        try:
+            validate_config(self)
+            configured = True
+            reason = None
+        except ValueError as exc:
+            configured = False
+            reason = str(exc)
+        try:
+            parsed = urlsplit(self.base_url)
+            safe_url = urlunsplit(
+                (parsed.scheme, parsed.netloc.split("@")[-1], parsed.path, "", "")
+            )
+        except ValueError:
+            safe_url = ""
         return {
             "enabled": self.enabled,
             "configured": configured,
             "model": self.model,
+            "provider": self.provider,
+            "protocol": self.protocol,
+            "runtime": "langgraph",
             "base_url": safe_url,
             "reason": None
             if self.enabled and configured
             else (
                 "Agent is disabled"
                 if not self.enabled
-                else "Configure a model and base URL"
+                else reason
             ),
         }

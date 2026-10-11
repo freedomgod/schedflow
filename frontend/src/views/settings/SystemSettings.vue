@@ -1,7 +1,7 @@
 <template>
   <div class="system-settings page-wrapper">
     <h1 class="page-title gradient-text">系统设置</h1>
-    <p class="page-description">管理界面偏好、全局变量与访问设置。</p>
+    <p class="page-description">管理界面偏好、AI Agent、全局变量与访问设置。</p>
 
     <div class="settings-tabs">
       <button
@@ -9,7 +9,7 @@
         :key="tab.key"
         class="settings-tab"
         :class="{ active: activeTab === tab.key }"
-        @click="activeTab = tab.key"
+        @click="selectTab(tab.key)"
       >{{ tab.label }}</button>
     </div>
 
@@ -46,6 +46,10 @@
     </div>
 
     <!-- Variables tab -->
+    <div v-if="activeTab === 'agent'" class="tab-content">
+      <AgentSettings />
+    </div>
+
     <div v-show="activeTab === 'variables'" class="tab-content">
       <VariablesManager />
     </div>
@@ -151,7 +155,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import {
@@ -165,8 +170,11 @@ import type { TimezoneInfo } from '@/api/settings'
 import { useSettingsStore } from '@/stores/settings'
 import VariablesManager from './VariablesManager.vue'
 import ApiKeyManager from './ApiKeyManager.vue'
+import AgentSettings from './AgentSettings.vue'
 
 const settingsStore = useSettingsStore()
+const route = useRoute()
+const router = useRouter()
 const activeTab = ref('theme')
 const savingRateLimit = ref(false)
 const rateLimit = reactive({ enabled: false, rpm: 120 })
@@ -178,11 +186,14 @@ const timezoneOptions = ref<string[]>([])
 
 const tabs = [
   { key: 'theme', label: '主题设置' },
+  { key: 'agent', label: 'AI Agent' },
   { key: 'timezone', label: '时区设置' },
   { key: 'variables', label: '变量管理' },
   { key: 'apikeys', label: 'API Key' },
   { key: 'rate-limit', label: 'API 写限流' },
 ]
+watch(() => route.query.tab, tab => { activeTab.value = tabs.some(item => item.key === tab) ? String(tab) : 'theme' }, { immediate: true })
+function selectTab(tab: string) { void router.replace({ query: { ...route.query, tab } }) }
 
 function handleThemeChange(val: string) {
   settingsStore.switchTheme(val as 'light' | 'dark')

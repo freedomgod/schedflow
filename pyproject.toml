@@ -67,9 +67,10 @@ all = [
 agent = [
     "schedflow[web]",
     "httpx >= 0.28,<1",
+    "langgraph >= 1.0,<2",
 ]
 test = [
-    "schedflow[mongodb,redis,sqlalchemy,tornado,web]",
+    "schedflow[mongodb,redis,sqlalchemy,tornado,web,agent]",
     "pytest",
     "pytest-timeout",
     "anyio >= 4.5.2",

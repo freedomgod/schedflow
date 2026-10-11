@@ -8,6 +8,9 @@ import type { AgentConfig, AgentMessage, AgentOperation, AgentProposal, AgentSes
 
 export const useAgentStore = defineStore('agent', () => {
   const config = ref<AgentConfig | null>(null)
+  const configPending = ref(false)
+  const configError = ref('')
+  let configRevision = 0
   const sessions = ref<AgentSession[]>([])
   const session = ref<AgentSession | null>(null)
   const activeTurn = ref<TurnState | null>(null)
@@ -25,6 +28,36 @@ export const useAgentStore = defineStore('agent', () => {
     return deduplicateOperationCards(result)
   })
   function report(cause: unknown) { error.value = cause instanceof Error ? cause.message : String(cause) }
+  function applySavedConfig(value: AgentConfig) {
+    ++configRevision; config.value = value
+    if (error.value === configError.value) error.value = ''
+    configError.value = ''
+  }
+  async function refreshConfig() {
+    const revision = ++configRevision
+    try {
+      const value = await agentApi.config()
+      if (revision === configRevision) config.value = value
+      return value
+    } catch (cause) {
+      if (revision === configRevision) { configError.value = cause instanceof Error ? cause.message : String(cause); report(cause) }
+      return null
+    }
+  }
+  async function setEnabled(enabled: boolean) {
+    if (configPending.value || !config.value || (enabled && !config.value.configured)) return false
+    configPending.value = true; configError.value = ''; error.value = ''
+    ++configRevision
+    try {
+      applySavedConfig(await agentApi.setEnabled(enabled))
+      return true
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      await refreshConfig()
+      configError.value = message; report(cause)
+      return false
+    } finally { configPending.value = false }
+  }
   function mergeSession(value: AgentSession) {
     session.value = { ...value, messages: value.messages || [], turns: value.turns || [], proposals: value.proposals || [] }
     for (const proposal of value.proposals || []) proposals.value[proposal.proposal_id] = proposal
@@ -35,7 +68,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
   async function initialize() {
     pollingEnabled = true; scheduleOperations(); loading.value = true; error.value = ''
-    try { config.value = await agentApi.config(); sessions.value = await agentApi.sessions(); const saved = localStorage.getItem('schedflow_agent_session'); const target = sessions.value.find(s => s.session_id === saved) || sessions.value[0]; if (target) await openSession(target.session_id) }
+    try { if (!await refreshConfig()) return; sessions.value = await agentApi.sessions(); const saved = localStorage.getItem('schedflow_agent_session'); const target = sessions.value.find(s => s.session_id === saved) || sessions.value[0]; if (target) await openSession(target.session_id) }
     catch (cause) { report(cause) } finally { loading.value = false }
   }
   async function openSession(sessionId: string) {
@@ -61,7 +94,7 @@ export const useAgentStore = defineStore('agent', () => {
     try { await agentApi.deleteSession(sessionId); sessions.value = sessions.value.filter(s => s.session_id !== sessionId); if (session.value?.session_id === sessionId) { ++epoch; streamController?.abort(); session.value = null; activeTurn.value = null; localStorage.removeItem('schedflow_agent_session'); if (sessions.value[0]) await openSession(sessions.value[0].session_id) } } catch (cause) { report(cause) }
   }
   async function send(text: string, jobId?: string) {
-    if (busy.value || !text.trim() || !config.value?.enabled || !config.value.configured) return false
+    if (busy.value || configPending.value || !text.trim() || !config.value?.enabled || !config.value.configured) return false
     sending.value = true; error.value = ''
     try {
       if (!session.value) { const value = await agentApi.createSession(); sessions.value.unshift(value); mergeSession(value); localStorage.setItem('schedflow_agent_session', value.session_id) }
@@ -117,6 +150,7 @@ export const useAgentStore = defineStore('agent', () => {
   }
   async function loadProposal(proposalId: string) { try { const proposal = await agentApi.proposal(proposalId); proposals.value[proposalId] = proposal; if (proposal.operation_id) void refreshOperation(proposal.operation_id) } catch (cause) { report(cause) } }
   async function approve(proposalId: string) {
+    if (!config.value?.enabled || !config.value.configured || configPending.value) { error.value = '请先启用已配置的 Agent，再确认候选。'; return }
     const proposal = proposals.value[proposalId]
     if (!proposal || pendingActions.value[proposalId] || !canApprove(proposal, proposal.version)) return
     pendingActions.value[proposalId] = true; error.value = ''
@@ -141,5 +175,5 @@ export const useAgentStore = defineStore('agent', () => {
     operationTimer = setTimeout(async () => { operationTimer = null; await Promise.all(pending.map(async operation => { try { operations.value[operation.operation_id] = await agentApi.operation(operation.operation_id) } catch { /* Preserve last known receipt while reconnecting. */ } })); scheduleOperations() }, 2000)
   }
   function disconnect() { pollingEnabled = false; ++epoch; streamController?.abort(); if (operationTimer) clearTimeout(operationTimer); operationTimer = null }
-  return { config, sessions, session, activeTurn, proposals, operations, pendingActions, loading, sending, busy, messages, error, connection, initialize, openSession, newSession, removeSession, send, reconnect, cancel, loadProposal, approve, reject, revise, refreshOperation, disconnect }
+  return { config, configPending, configError, applySavedConfig, refreshConfig, setEnabled, sessions, session, activeTurn, proposals, operations, pendingActions, loading, sending, busy, messages, error, connection, initialize, openSession, newSession, removeSession, send, reconnect, cancel, loadProposal, approve, reject, revise, refreshOperation, disconnect }
 })

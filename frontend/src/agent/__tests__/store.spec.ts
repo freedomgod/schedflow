@@ -1,12 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-const api = vi.hoisted(() => ({ config: vi.fn(), sessions: vi.fn(), createSession: vi.fn(), session: vi.fn(), send: vi.fn(), turn: vi.fn(), cancel: vi.fn(), proposal: vi.fn(), approve: vi.fn(), reject: vi.fn(), revise: vi.fn(), operation: vi.fn(), deleteSession: vi.fn() }))
+const api = vi.hoisted(() => ({ config: vi.fn(), setEnabled: vi.fn(), sessions: vi.fn(), createSession: vi.fn(), session: vi.fn(), send: vi.fn(), turn: vi.fn(), cancel: vi.fn(), proposal: vi.fn(), approve: vi.fn(), reject: vi.fn(), revise: vi.fn(), operation: vi.fn(), deleteSession: vi.fn() }))
 const stream = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock('../api', () => ({ agentApi: api, streamTurn: stream }))
 import { useAgentStore } from '../../stores/agent'
 const session = { session_id: 's', title: '测试', messages: [], turns: [], proposals: [] }
 beforeEach(() => { setActivePinia(createPinia()); vi.clearAllMocks(); vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() }) })
 describe('Agent session state', () => {
+  it('does not overwrite a newer toggle with an older initialization config response', async () => {
+    let finish!: (value: unknown) => void
+    api.config.mockReturnValue(new Promise(resolve => { finish = resolve })); api.sessions.mockResolvedValue([])
+    api.setEnabled.mockResolvedValue({ enabled: false, configured: true, model: 'test' })
+    const store = useAgentStore(); store.config = { enabled: true, configured: true, model: 'test' }
+    const initializing = store.initialize(); await store.setEnabled(false)
+    finish({ enabled: true, configured: true, model: 'test' }); await initializing
+    expect(store.config?.enabled).toBe(false)
+  })
   it('loads history and restores the last session', async () => {
     api.config.mockResolvedValue({ enabled: true, configured: true, model: 'test' }); api.sessions.mockResolvedValue([session]); api.session.mockResolvedValue(session)
     const store = useAgentStore(); await store.initialize()
@@ -46,7 +55,7 @@ describe('Agent session state', () => {
     const proposal = { proposal_id: 'p', version: 1, status: 'pending', action: 'create', before: null, after: {}, payload: {}, diff: [] }
     let resolve!: (value: unknown) => void
     api.approve.mockReturnValue(new Promise(r => { resolve = r })); api.proposal.mockResolvedValue({ ...proposal, status: 'approved' })
-    const store = useAgentStore(); store.proposals.p = proposal as any
+    const store = useAgentStore(); store.config = { enabled: true, configured: true, model: 'test' }; store.proposals.p = proposal as any
     const first = store.approve('p'); await store.approve('p')
     expect(api.approve).toHaveBeenCalledTimes(1)
     resolve({ operation_id: 'o', status: 'succeeded', action: 'create' }); await first
@@ -56,7 +65,7 @@ describe('Agent session state', () => {
     const proposal = { proposal_id: 'p', version: 1, status: 'awaiting_confirmation', action: 'create', before: null, after: {}, payload: {}, diff: [] }
     api.approve.mockResolvedValue({ operation_id: 'o', status: 'succeeded', action: 'create' }); api.proposal.mockResolvedValue({ ...proposal, status: 'committed', operation_id: 'o' })
     api.session.mockResolvedValue({ ...session, messages: [{ message_id: 'receipt', role: 'assistant', status: 'completed', blocks: [{ type: 'operation_receipt', operation_id: 'o' }] }] })
-    const store = useAgentStore(); store.session = session; store.proposals.p = proposal as any
+    const store = useAgentStore(); store.config = { enabled: true, configured: true, model: 'test' }; store.session = session; store.proposals.p = proposal as any
     await store.approve('p')
     expect(store.messages[0].blocks[0]).toEqual({ type: 'operation_receipt', operation_id: 'o' })
   })

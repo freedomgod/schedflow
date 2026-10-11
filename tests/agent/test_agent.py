@@ -284,7 +284,8 @@ async def test_provider_assembles_tool_deltas_by_index_and_redacts_errors():
                 {
                     "delta": {
                         "tool_calls": [{"index": 0, "function": {"arguments": "}"}}]
-                    }
+                    },
+                    "finish_reason": "tool_calls",
                 }
             ]
         },
@@ -302,8 +303,13 @@ async def test_provider_assembles_tool_deltas_by_index_and_redacts_errors():
     provider = ChatCompletionsProvider(config(api_key="secret"), client=client)
     events = [e async for e in provider.stream([], [])]
     assert events[0] == {"type": "text", "text": "Hi"}
-    assert events[-1]["arguments"] == "{}"
-    assert events[-1]["name"] == "list_workflows"
+    assert [event for event in events if event["type"] == "tool_call"][-1][
+        "arguments"
+    ] == "{}"
+    assert events[-1]["type"] == "assistant_message"
+    assert [event for event in events if event["type"] == "tool_call"][-1][
+        "name"
+    ] == "list_workflows"
     await client.aclose()
 
 

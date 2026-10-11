@@ -16,6 +16,21 @@ export interface AgentSession { last_seq?: number; session_id: string; title: st
 export interface CoreJob { workflow_timeout?: number | null; job_id?: string; name?: string; description?: string; enabled?: boolean; status?: string; workflow?: { nodes: Array<{ node_id: string; name?: string; retries?: number; timeout?: number; task: Record<string, unknown> }>; edges: Array<{ source: string; target: string; condition?: unknown }> }; trigger?: { type?: string; args?: Record<string, unknown> }; [key: string]: unknown }
 export interface AgentProposal { run_timeout?: number | null; proposal_id: string; version: number; status: ProposalStatus; action: 'create' | 'update' | 'run'; job_id?: string; name?: string; before: CoreJob | null; after: CoreJob | null; payload: CoreJob; diff: Array<{ path: string; before: unknown; after: unknown }>; expires_at?: string; operation_id?: string }
 export interface AgentOperation { operation_id: string; status: OperationStatus; action: string; job_id?: string; execution_id?: string; result?: unknown; error?: string }
-export interface AgentConfig { enabled: boolean; configured: boolean; model: string; base_url?: string; reason?: string }
+export type AgentProtocol = 'responses' | 'chat_completions' | 'anthropic_messages'
+export interface AgentConfig {
+  enabled: boolean; configured: boolean; model: string; base_url?: string; reason?: string
+  provider?: string; protocol?: AgentProtocol; region?: string; workspace_id?: string
+  max_steps?: number; timeout?: number; max_tokens?: number; allow_code_generation?: boolean; retention_days?: number
+  has_api_key?: boolean; source?: 'environment' | 'database'; runtime?: 'langgraph'
+}
+export interface AgentProvider {
+  id: string; label: string; protocol: AgentProtocol; base_url: string; models: string[]; requires_api_key: boolean
+  regions?: { id: string; label: string; base_url: string }[]
+}
+export interface AgentConfigUpdate {
+  enabled: boolean; provider: string; protocol: AgentProtocol; base_url: string; model: string
+  region?: string; workspace_id?: string; api_key?: string; clear_api_key: boolean
+  max_steps: number; timeout: number; max_tokens: number; allow_code_generation: boolean; retention_days: number
+}
 export type EventType = 'message.delta' | 'message.completed' | 'status' | 'proposal.created' | 'turn.completed' | 'turn.failed'
 export interface AgentEvent { seq: number; turn_id: string; type: EventType; payload: Record<string, unknown> }

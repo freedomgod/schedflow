@@ -3,8 +3,10 @@
 import asyncio
 import copy
 import json
+import logging
 import re
 from collections import Counter
+from contextlib import aclosing
 from datetime import UTC, datetime, timedelta
 
 from schedflow.api.timezone import with_default_timezone
@@ -14,7 +16,7 @@ from schedflow.core.jobstore import JobConflictError, JobNotFoundError
 from schedflow.triggers.base import Trigger
 
 from .config import AgentConfig
-from .provider import ChatCompletionsProvider
+from .provider import create_provider
 from .repository import AgentRepository, timestamp, uid
 from .validation import (
     Candidate,
@@ -83,25 +85,119 @@ def diff(before, after):
 class AgentService:
     def __init__(self, scheduler, repository=None, provider=None, config=None):
         self.scheduler = scheduler
-        self.config = config or AgentConfig()
+        self._explicit_config = config is not None
+        # Defer environment parsing and provider construction until persisted
+        # settings have been resolved in start(). Constructing the app stays lazy.
+        self.config = config if config is not None else AgentConfig.model_construct()
         self.repository = repository or AgentRepository()
-        self.provider = provider or ChatCompletionsProvider(self.config)
+        self._injected_provider = provider is not None
+        self.provider = provider or (
+            create_provider(self.config) if config is not None else None
+        )
+        from .settings import AgentSettings
+
+        self.settings = AgentSettings(self.repository.connection_factory)
+        self.config_source = "environment"
+        self.lifecycle_lock = asyncio.Lock()
+        self._reconfiguring = False
+        self._known_keys = {self.config.api_key} if self.config.api_key else set()
+        self.turn_actors = {}
         self.tasks = {}
         self.closed = False
 
     async def start(self):
         self.closed = False
+        if not self._explicit_config:
+            config, source = self.settings.load(None)
+            config = config if config is not None else AgentConfig()
+            old = self.provider
+            self.config, self.config_source = config, source
+            if not self._injected_provider:
+                self.provider = create_provider(config)
+            if config.api_key:
+                self._known_keys.add(config.api_key)
+            if old is not self.provider and hasattr(old, "close"):
+                await old.close()
         self.repository.recover()
         self.repository.cleanup(self.config.retention_days)
 
     async def close(self):
-        self.closed = True
-        for task in self.tasks.values():
-            task.cancel()
-        if self.tasks:
-            await asyncio.gather(*self.tasks.values(), return_exceptions=True)
-        if hasattr(self.provider, "close"):
-            await self.provider.close()
+        async with self.lifecycle_lock:
+            self.closed = True
+            await self._cancel_turns()
+            if hasattr(self.provider, "close"):
+                await self.provider.close()
+
+    async def _cancel_turns(self):
+        active = [(key, task) for key, task in self.tasks.items() if not task.done()]
+        for key, task in active:
+            actor = self.turn_actors.get(key)
+            if actor is not None:
+                self.cancel(actor, key)
+            else:
+                task.cancel()
+        if active:
+            await asyncio.gather(*(task for _, task in active), return_exceptions=True)
+
+    def public_config(self):
+        from .settings import public_config
+
+        return self._safe(public_config(self.config, self.config_source))
+
+    async def configure(self, changes):
+        from .settings import config_candidate
+
+        async with self.lifecycle_lock:
+            if self.closed:
+                raise ValueError("Agent service is closed")
+            candidate = config_candidate(self.config, changes)
+            replacement = create_provider(candidate)
+            with self.repository.lock:
+                self._reconfiguring = True
+            try:
+                await self._cancel_turns()
+                self.settings.save(candidate)
+                with self.repository.lock:
+                    old = self.provider
+                    self.config, self.provider = candidate, replacement
+                    self.config_source = "database"
+                    if candidate.api_key:
+                        self._known_keys.add(candidate.api_key)
+                if hasattr(old, "close"):
+                    try:
+                        await old.close()
+                    except Exception:  # noqa: BLE001 -- connection cleanup must not expose provider request data
+                        logging.getLogger(__name__).warning(
+                            "Previous Agent connection cleanup failed"
+                        )
+                return self.public_config()
+            finally:
+                with self.repository.lock:
+                    self._reconfiguring = False
+
+    async def set_enabled(self, enabled):
+        # Build inside the same lifecycle lock as the update, avoiding stale config
+        # overwrite if a toggle races another configuration save.
+        async with self.lifecycle_lock:
+            changes = self.config.model_dump(exclude={"api_key"})
+            changes["enabled"] = enabled
+            from .settings import config_candidate
+
+            candidate = config_candidate(self.config, changes)
+            if self.closed:
+                raise ValueError("Agent service is closed")
+            with self.repository.lock:
+                self._reconfiguring = True
+            try:
+                await self._cancel_turns()
+                self.settings.save(candidate)
+                with self.repository.lock:
+                    self.config = candidate
+                    self.config_source = "database"
+                return self.public_config()
+            finally:
+                with self.repository.lock:
+                    self._reconfiguring = False
 
     def _require(self, kind, actor, key):
         item = self.repository.get(kind, actor, key)
@@ -110,7 +206,10 @@ class AgentService:
         return item
 
     def _safe(self, value):
-        return redact(value, self.config.api_key)
+        value = redact(value, self.config.api_key)
+        for secret in self._known_keys:
+            value = redact(value, secret)
+        return value
 
     def _event(self, actor, session_id, turn_id, kind, payload):
         self.repository.add_event(actor, session_id, turn_id, kind, self._safe(payload))
@@ -334,6 +433,8 @@ class AgentService:
                 raise ValueError("Proposal version changed; review it again")
             if p.get("operation_id"):
                 return self.get_operation(actor, p["operation_id"])
+            if self.closed or self._reconfiguring or not self.config.enabled:
+                raise ValueError("Agent is disabled or being reconfigured")
             self._pending(p)
             op = {
                 "operation_id": uid(),
@@ -482,8 +583,15 @@ class AgentService:
         return self._safe(op)
 
     async def submit_turn(self, actor, session_id, message, job_id=None):
+        async with self.lifecycle_lock:
+            return self._submit_turn(actor, session_id, message, job_id)
+
+    def _submit_turn(self, actor, session_id, message, job_id=None):
         if self.closed or not self.config.enabled or not self.config.model:
             raise ValueError("Agent is disabled or unconfigured")
+        from .settings import validate_config
+
+        validate_config(self.config)
         self._require("session", actor, session_id)
         with self.repository.lock:
             if any(
@@ -513,6 +621,7 @@ class AgentService:
             )
             task = asyncio.create_task(self._turn(actor, turn))
             self.tasks[turn["turn_id"]] = task
+            self.turn_actors[turn["turn_id"]] = actor
         return turn
 
     async def wait_turn(self, turn_id):
@@ -603,100 +712,14 @@ class AgentService:
                     messages.pop(1)
                 if sum(len(json.dumps(m)) for m in messages) > 120000:
                     raise ValueError("Assistant initial context exceeded the limit")
-                for _ in range(self.config.max_steps):
-                    calls, text_parts = [], []
-                    pending_text = ""
-                    text_block = {"type": "assistant_text", "text": ""}
-                    msg["blocks"].append(text_block)
+                from .runtime import AgentRuntime
 
-                    def emit_text(text, block=text_block):
-                        if not text:
-                            return
-                        with self.repository.lock:
-                            block["text"] += text
-                            self.repository.put("message", actor, session_id, msg)
-                            self._event(
-                                actor,
-                                session_id,
-                                turn_id,
-                                "message.delta",
-                                {"message_id": msg["message_id"], "text": text},
-                            )
-
-                    async for event in self.provider.stream(messages, self.tools()):
-                        if event["type"] == "text":
-                            text = event["text"]
-                            text_parts.append(text)
-                            pending_text += text
-                            if sum(map(len, text_parts)) > self.config.max_tokens * 8:
-                                raise ValueError("Assistant output exceeded the limit")
-                            # Keep a trailing window so credentials split across provider deltas
-                            # are redacted before any prefix can reach the browser or journal.
-                            keep = max(256, len(self.config.api_key) + 16)
-                            if len(pending_text) > keep:
-                                end = max(
-                                    pending_text.rfind(
-                                        separator, 0, len(pending_text) - keep
-                                    )
-                                    for separator in (
-                                        " ",
-                                        "\n",
-                                        "。",
-                                        "！",
-                                        "\uff1f",
-                                        "；",
-                                    )
-                                )
-                                if end > 0:
-                                    emit_text(self._safe(pending_text[: end + 1]))
-                                    pending_text = pending_text[end + 1 :]
-                        elif event["type"] == "tool_call":
-                            calls.append(event)
-                            if len(calls) > 16:
-                                raise ValueError("Too many tool calls")
-                    emit_text(self._safe(pending_text))
-                    if not text_parts:
-                        msg["blocks"].remove(text_block)
-                    if not calls:
-                        break
-                    messages.append(
-                        {
-                            "role": "assistant",
-                            "content": "".join(text_parts) or None,
-                            "tool_calls": [
-                                {
-                                    "id": c["id"],
-                                    "type": "function",
-                                    "function": {
-                                        "name": c["name"],
-                                        "arguments": c["arguments"],
-                                    },
-                                }
-                                for c in calls
-                            ],
-                        }
-                    )
-                    for call in calls:
-                        try:
-                            result, block = self._tool(actor, session_id, turn_id, call)
-                            if block:
-                                msg["blocks"].append(block)
-                        except (ValueError, KeyError, TypeError) as exc:
-                            result = {"error": self._safe(str(exc))}
-                        content = json.dumps(self._safe(result), ensure_ascii=False)[
-                            :24000
-                        ]
-                        messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": call["id"],
-                                "content": content,
-                            }
-                        )
-                    if sum(len(json.dumps(m)) for m in messages) > 120000:
-                        raise ValueError("Assistant context exceeded the limit")
-                else:
-                    raise ValueError("Agent step limit reached; start another turn")
+                runtime = AgentRuntime(
+                    lambda context: self._model_step(actor, turn, msg, context),
+                    lambda calls: self._tool_step(actor, turn, msg, calls),
+                    max_steps=self.config.max_steps,
+                )
+                await runtime.run(messages)
                 turn["status"] = "completed"
                 msg["status"] = "completed"
         except asyncio.CancelledError:
@@ -728,6 +751,103 @@ class AgentService:
                 }
             ),
         )
+
+    async def _model_step(self, actor, turn, msg, messages):
+        session_id, turn_id = turn["session_id"], turn["turn_id"]
+        calls, text_parts = [], []
+        assistant = None
+        pending_text = ""
+        text_block = {"type": "assistant_text", "text": ""}
+        msg["blocks"].append(text_block)
+
+        def emit_text(text, block=text_block):
+            if not text:
+                return
+            with self.repository.lock:
+                block["text"] += text
+                self.repository.put("message", actor, session_id, msg)
+                self._event(
+                    actor,
+                    session_id,
+                    turn_id,
+                    "message.delta",
+                    {"message_id": msg["message_id"], "text": text},
+                )
+
+        async with aclosing(self.provider.stream(messages, self.tools())) as stream:
+            async for event in stream:
+                if event["type"] == "text":
+                    text = event["text"]
+                    text_parts.append(text)
+                    pending_text += text
+                    if sum(map(len, text_parts)) > self.config.max_tokens * 8:
+                        raise ValueError("Assistant output exceeded the limit")
+                    # Keep a trailing window so credentials split across provider deltas
+                    # are redacted before any prefix can reach the browser or journal.
+                    keep = max(256, len(self.config.api_key) + 16)
+                    if len(pending_text) > keep:
+                        end = max(
+                            pending_text.rfind(separator, 0, len(pending_text) - keep)
+                            for separator in (
+                                " ",
+                                "\n",
+                                "。",
+                                "！",
+                                "\uff1f",
+                                "；",
+                            )
+                        )
+                        if end > 0:
+                            emit_text(self._safe(pending_text[: end + 1]))
+                            pending_text = pending_text[end + 1 :]
+                elif event["type"] == "tool_call":
+                    calls.append(event)
+                    if len(calls) > 16:
+                        raise ValueError("Too many tool calls")
+                elif event["type"] == "assistant_message":
+                    assistant = event["message"]
+        emit_text(self._safe(pending_text))
+        if not text_parts:
+            msg["blocks"].remove(text_block)
+        return {
+            "calls": calls,
+            "assistant": assistant
+            or {
+                "role": "assistant",
+                "content": "".join(text_parts) or None,
+                "tool_calls": [
+                    {
+                        "id": call["id"],
+                        "type": "function",
+                        "function": {
+                            "name": call["name"],
+                            "arguments": call["arguments"],
+                        },
+                    }
+                    for call in calls
+                ],
+            },
+        }
+
+    async def _tool_step(self, actor, turn, msg, calls):
+        session_id, turn_id = turn["session_id"], turn["turn_id"]
+        results = []
+        for call in calls:
+            try:
+                result, block = self._tool(actor, session_id, turn_id, call)
+                if block:
+                    msg["blocks"].append(block)
+            except (ValueError, KeyError, TypeError) as exc:
+                result = {"error": self._safe(str(exc))}
+            content = json.dumps(self._safe(result), ensure_ascii=False)[:24000]
+            results.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "content": content,
+                }
+            )
+        return results
 
     def tools(self):
         schemas = {
