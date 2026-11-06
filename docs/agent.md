@@ -52,6 +52,8 @@ SCHEDFLOW_AGENT_ALLOW_CODE_GENERATION=false
 
 确认前可以继续描述对草案的调整，例如「把刚才的草案改到九点」。助手会保留同一个工作流身份并生成新版本，旧草案不能再提交；互不相关的新建草案可以同时保留。
 
+修改已完成的一次性任务时，草案默认保存为暂停，保留原触发器或使用新指定的触发器。需要重新调度时，在工作台明确选择启用并确认。
+
 可以尝试「查看上次失败的节点」「把这个工作流改到每天九点」「创建两个节点，第二个依赖第一个」「运行当前工作流」。涉及重名任务或信息不完整时，应先提供明确 ID、时区或节点内容。
 
 ## 执行与恢复
@@ -77,5 +79,7 @@ SCHEDFLOW_AGENT_ALLOW_CODE_GENERATION=false
 页面的高级设置也可控制新代码生成、模型轮数、超时、输出 token 和历史保留时间。开启新代码生成不会绕过工作台确认。
 
 模型服务会收到所需的对话与任务投影；执行日志投影应截断并脱敏。任务参数中不要直接存放凭据，优先使用现有变量配置。在部署时选择适合个人数据的模型服务。助手文字只是说明，任务状态与操作结果以结构化回执为准。
+
+草案工具向模型返回摘要，已有脚本源码保留在服务端和用户确认工作台。选中的任务与待确认草案通过独立的数据消息提供，不拼入系统指令。
 
 供应商协议依据官方文档：[OpenAI](https://developers.openai.com/api/docs/guides/function-calling)、[DeepSeek](https://api-docs.deepseek.com/guides/thinking_mode/)、[百炼](https://help.aliyun.com/zh/model-studio/more-tools)、[Kimi](https://platform.kimi.com/docs/guide/use-thinking-models)、[GLM](https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3)、[Claude](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview)、[Gemini](https://ai.google.dev/gemini-api/docs/openai)。协议适配通过模拟 HTTP 测试验证；没有真实供应商密钥时不代表已完成该账户的联网验收，请使用页面的连接测试。
